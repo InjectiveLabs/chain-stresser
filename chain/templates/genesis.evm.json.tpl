@@ -1,10 +1,30 @@
 {
-  "app_name": "injectived",
-  "app_version": "{{.AppVersion}}",
   "genesis_time": "{{.GenesisTime}}",
   "chain_id": "{{.ChainID}}",
   "initial_height": "1",
-  "app_hash": null,
+  "consensus_params": {
+    "block": {
+      "max_bytes": "104857600",
+      "max_gas": "1000000000"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
+    },
+    "validator": {
+      "pub_key_types": [
+        "ed25519"
+      ]
+    },
+    "version": {
+      "app": "0"
+    },
+    "abci": {
+      "vote_extensions_enable_height": "0"
+    }
+  },
+  "app_hash": "",
   "app_state": {
     "07-tendermint": null,
     "auction": {
@@ -208,7 +228,7 @@
     },
     "feemarket": {
       "params": {
-        "no_base_fee": false,
+        "no_base_fee": true,
         "base_fee_change_denominator": 8,
         "elasticity_multiplier": 2,
         "enable_height": "0",
@@ -216,7 +236,7 @@
         "min_gas_price": "0.000000000000000000",
         "min_gas_multiplier": "0.500000000000000000"
       },
-      "block_gas": "0"
+      "block_gas": "1000000000"
     },
     "genutil": {
       "gen_txs": []
@@ -508,30 +528,6 @@
         }
       },
       "registered_contracts": []
-    }
-  },
-  "consensus": {
-    "params": {
-      "block": {
-        "max_bytes": "22020096",
-        "max_gas": "-1"
-      },
-      "evidence": {
-        "max_age_num_blocks": "100000",
-        "max_age_duration": "172800000000000",
-        "max_bytes": "1048576"
-      },
-      "validator": {
-        "pub_key_types": [
-          "ed25519"
-        ]
-      },
-      "version": {
-        "app": "0"
-      },
-      "abci": {
-        "vote_extensions_enable_height": "0"
-      }
     }
   }
 }

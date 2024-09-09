@@ -1,10 +1,30 @@
 {
-  "app_name": "injectived",
-  "app_version": "{{.AppVersion}}",
   "genesis_time": "{{.GenesisTime}}",
   "chain_id": "{{.ChainID}}",
   "initial_height": "1",
-  "app_hash": null,
+  "consensus_params": {
+    "block": {
+      "max_bytes": "104857600",
+      "max_gas": "-1"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
+    },
+    "validator": {
+      "pub_key_types": [
+        "ed25519"
+      ]
+    },
+    "version": {
+      "app": "0"
+    },
+    "abci": {
+      "vote_extensions_enable_height": "0"
+    }
+  },
+  "app_hash": "",
   "app_state": {
     "07-tendermint": null,
     "auction": {
@@ -440,7 +460,6 @@
       "total_escrowed": []
     },
     "upgrade": {},
-    "vesting": {},
     "wasm": {
       "params": {
         "code_upload_access": {
@@ -465,30 +484,6 @@
         }
       },
       "registered_contracts": []
-    }
-  },
-  "consensus": {
-    "params": {
-      "block": {
-        "max_bytes": "22020096",
-        "max_gas": "-1"
-      },
-      "evidence": {
-        "max_age_num_blocks": "100000",
-        "max_age_duration": "172800000000000",
-        "max_bytes": "1048576"
-      },
-      "validator": {
-        "pub_key_types": [
-          "ed25519"
-        ]
-      },
-      "version": {
-        "app": "0"
-      },
-      "abci": {
-        "vote_extensions_enable_height": "0"
-      }
     }
   }
 }

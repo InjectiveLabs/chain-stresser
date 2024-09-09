@@ -39,6 +39,9 @@ type Client struct {
 	clientCtx client.Context
 }
 
+func (c Client) TxConfig() client.TxConfig {
+	return c.clientCtx.TxConfig
+}
 func (c Client) GetNumberSequence(address string) (uint64, uint64, error) {
 	addr, err := sdk.AccAddressFromBech32(address)
 	orPanic(err)
@@ -69,6 +72,19 @@ func (c Client) BuildAndSignTx(
 		tx.Fee,
 		tx.GasLimit,
 		tx.Msgs...,
+	)
+}
+
+func (c Client) SignTx(
+	signerAccount Account,
+	txBuilder client.TxBuilder,
+) (signedTx authsigning.Tx, err error) {
+	return signTx(
+		c.clientCtx,
+		signerAccount.Key,
+		signerAccount.Number,
+		signerAccount.Sequence,
+		txBuilder,
 	)
 }
 
@@ -181,10 +197,6 @@ func buildAndSignTx(
 	gasLimit uint64,
 	msgs ...sdk.Msg,
 ) (signedTx authsigning.Tx, err error) {
-	privKey := &ethsecp256k1.PrivKey{
-		Key: signerKey,
-	}
-
 	txBuilder := clientCtx.TxConfig.NewTxBuilder()
 	txBuilder.SetGasLimit(gasLimit)
 	txBuilder.SetFeeAmount(fee)
@@ -192,6 +204,22 @@ func buildAndSignTx(
 		err = errors.Wrap(err, "failed to set Tx messages")
 		return nil, err
 	}
+
+	return signTx(
+		clientCtx,
+		signerKey,
+		accNum,
+		accSeq,
+		txBuilder,
+	)
+}
+
+func signTx(
+	clientCtx client.Context,
+	signerKey Secp256k1PrivateKey,
+	accNum, accSeq uint64,
+	txBuilder client.TxBuilder,
+) (signedTx authsigning.Tx, err error) {
 
 	signerData := authsigning.SignerData{
 		ChainID:       clientCtx.ChainID,
@@ -202,6 +230,10 @@ func buildAndSignTx(
 	sigData := &signing.SingleSignatureData{
 		SignMode:  signing.SignMode_SIGN_MODE_DIRECT,
 		Signature: nil,
+	}
+
+	privKey := &ethsecp256k1.PrivKey{
+		Key: signerKey,
 	}
 
 	sig := signing.SignatureV2{

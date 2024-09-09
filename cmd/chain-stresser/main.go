@@ -21,7 +21,7 @@ const (
 	defaultNumOfAccounts = 1000
 	defaultNumOfTx       = 100
 
-	defaultNumOfValidators = 4
+	defaultNumOfValidators = 1
 	defaultNumOfSentries   = 0
 	defaultNumOfInstances  = 1
 )
@@ -125,6 +125,41 @@ func main() {
 		},
 	}
 	rootCmd.AddCommand(txBankSendCmd)
+
+	txEthSendCmd := &cobra.Command{
+		Use:   "tx-eth-send",
+		Short: "Run stresstest with eth value send transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if numOfAccounts <= 0 {
+				return errors.New("number of accounts must be greater than 0")
+			}
+
+			keysRaw, err := os.ReadFile(accountFile)
+			if err != nil {
+				return errors.Wrap(err, "reading account file failed")
+			} else if err := json.Unmarshal(keysRaw, &stressCfg.Accounts); err != nil {
+				return errors.Wrap(err, "parsing account file failed")
+			} else if numOfAccounts > len(stressCfg.Accounts) {
+				return errors.New("number of accounts is greater than the number of provided private keys")
+			}
+
+			stressCfg.Accounts = stressCfg.Accounts[:numOfAccounts]
+
+			sendAmount := "1" + chain.DefaultBondDenom
+			ethSendProvider, err := payload.NewEthSendProvider(stressCfg.ChainID, stressCfg.MinGasPrice, sendAmount)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate eth value send stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, ethSendProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txEthSendCmd)
 
 	orPanic(rootCmd.Execute())
 }

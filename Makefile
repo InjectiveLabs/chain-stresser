@@ -7,7 +7,7 @@ install:
 	go install ./cmd/...
 
 gen-0:
-	chain-stresser generate --validators 1 --sentries 0 --instances 1 --evm true
+	chain-stresser generate --accounts-num 1000 --validators 1 --sentries 0 --instances 1 --evm true
 
 val-0-start:
 	injectived --home="./chain-stresser-deploy/validators/0" start
@@ -17,6 +17,9 @@ val-0-clean:
 
 run-bank-send:
 	chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accounts.json
+
+run-eth-send:
+	chain-stresser tx-eth-send --accounts ./chain-stresser-deploy/instances/0/accounts.json
 
 cook:
 	rsync -r ../chain-stresser cooking:~/go/src/

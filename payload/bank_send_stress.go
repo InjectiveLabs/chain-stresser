@@ -17,6 +17,8 @@ type bankSendProvider struct {
 	maxGasLimit uint64
 }
 
+// NewBankSendProvider creates transaction factory for stress testing
+// native x/bank coin transfers between accounts.
 func NewBankSendProvider(
 	minGasPrice string,
 	sendAmount string,
