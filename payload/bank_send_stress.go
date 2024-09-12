@@ -38,7 +38,7 @@ func NewBankSendProvider(
 	provider := &bankSendProvider{
 		sendAmount:  parsedAmount,
 		minGasPrice: parsedMinGasPrice,
-		maxGasLimit: 200000,
+		maxGasLimit: 150000,
 	}
 
 	return provider, nil
@@ -109,4 +109,10 @@ func (p *bankSendProvider) BuildAndSignTx(
 	tx := *(unsignedTx.(*bankSendTx))
 	tx.txBytes = encodedTx
 	return &tx, nil
+}
+
+func (p *bankSendProvider) GenerateInitialTx(
+	req TxRequest,
+) (Tx, error) {
+	return nil, nil
 }

@@ -92,7 +92,7 @@ func (c Client) Encode(signedTx authsigning.Tx) []byte {
 	return bytesOrPanic(c.clientCtx.TxConfig.TxEncoder()(signedTx))
 }
 
-func (c Client) Broadcast(ctx context.Context, encodedTx []byte) (string, error) {
+func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (string, error) {
 	var txHash string
 	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -128,6 +128,10 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte) (string, error)
 	txHashBytes, err := hex.DecodeString(txHash)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to decode tx hash as hex")
+	}
+
+	if !await {
+		return txHash, nil
 	}
 
 	t := time.NewTimer(defaultBroadcastStatusPoll)

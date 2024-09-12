@@ -32,6 +32,9 @@ type StressConfig struct {
 
 	// NumOfTransactions to send per account
 	NumOfTransactions int
+
+	// AwaitTxConfirmation to wait for transaction to be included in a block
+	AwaitTxConfirmation bool
 }
 
 func Stress(
@@ -91,6 +94,14 @@ func Stress(
 				getAccountNumberSequencePace.Pause()
 			}()
 
+			if len(config.Accounts) == 0 {
+				return errors.New("empty accounts list")
+			} else {
+				// this ensures that the state required for benchmark is correctly initialized
+				// for EVM transactions this usually deploys a smart contract.
+				orPanic(createAndBroadcastInitialTx(ctx, logger, client, txProvider, config.Accounts[0]))
+			}
+
 			initialAccountSequences = make([]uint64, numOfAccounts)
 
 			for fromIdx := 0; fromIdx < numOfAccounts; fromIdx++ {
@@ -98,7 +109,7 @@ func Stress(
 
 				accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
 				if err != nil {
-					err = errors.Wrap(err, "❌ fetching account number and sequence failed")
+					err = errors.Wrap(err, "❌ Fetching account number and sequence failed")
 					return err
 				}
 
@@ -188,25 +199,25 @@ func Stress(
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 							tx := accountTxs[txIndex]
 
-							txHash, err := accountClient.Broadcast(ctx, tx)
+							txHash, err := accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
 							if err != nil {
 								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
 									logger.WithError(err).WithFields(log.Fields{
 										"expectedSequence": expectedAccSeq,
-									}).Warning("⚠️ tx broadcasting failed, trying suggested sequence")
+									}).Warning("⚠️ Tx broadcasting failed, trying suggested sequence")
 
 									txIndex = int(expectedAccSeq - initialSequence)
 									continue
 								}
 
-								err = errors.Wrap(err, "⚠️ tx broadcasting error")
+								err = errors.Wrap(err, "⚠️ Tx broadcasting error")
 								return err
 							}
 
 							broadcastTxPace.Step(1)
 							logger.WithFields(log.Fields{
 								"txHash": txHash,
-							}).Debug("✅ tx broadcasted")
+							}).Debug("✅ Tx broadcasted")
 
 							txIndex++
 						}
@@ -245,7 +256,7 @@ func getAccountNumberSequence(
 		var err error
 		accNum, accSeq, err = client.GetNumberSequence(accountAddress)
 		if err != nil {
-			logger.WithError(err).Warning("error while GetNumberSequence")
+			logger.WithError(err).Warning("⚠️ Error while GetNumberSequence")
 
 			return errors.Wrap(err, "querying for account number and sequence failed")
 		}
@@ -261,4 +272,63 @@ func getAccountNumberSequence(
 	}
 
 	return accNum, accSeq, nil
+}
+
+func createAndBroadcastInitialTx(
+	ctx context.Context,
+	logger log.Logger,
+	client chain.Client,
+	provider payload.TxProvider,
+	fromPrivateKey chain.Secp256k1PrivateKey,
+) error {
+	accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
+	if err != nil {
+		err = errors.Wrap(err, "❌ Fetching deployer account number and sequence failed")
+		return err
+	}
+
+	initialTx, err := provider.GenerateInitialTx(payload.TxRequest{
+		Keys: []chain.Secp256k1PrivateKey{
+			fromPrivateKey,
+		},
+
+		From: chain.Account{
+			Name:     "deployer",
+			Key:      fromPrivateKey,
+			Number:   accNum,
+			Sequence: accSeq,
+		},
+
+		FromIdx: 0,
+	})
+	if err != nil {
+		err = errors.Wrap(err, "❌ Generating initial Tx failed")
+		return err
+	}
+
+	if initialTx == nil {
+		// skip init tx
+		return nil
+	}
+
+	signedTx, err := provider.BuildAndSignTx(
+		client,
+		initialTx,
+	)
+	if err != nil {
+		err = errors.Wrap(err, "❌ Signing initial Tx failed")
+		return err
+	}
+
+	txHash, err := client.Broadcast(ctx, signedTx.Bytes(), true)
+	if err != nil {
+		err = errors.Wrapf(err, "❌ Broadcasting initial Tx failed: %s", txHash)
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"txHash": txHash,
+	}).Infoln("✅ Initial Tx broadcasted")
+
+	return nil
 }

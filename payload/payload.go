@@ -23,6 +23,10 @@ type TxRequest struct {
 type TxProvider interface {
 	Name() string
 
+	GenerateInitialTx(
+		req TxRequest,
+	) (Tx, error)
+
 	GenerateTx(
 		req TxRequest,
 	) (Tx, error)

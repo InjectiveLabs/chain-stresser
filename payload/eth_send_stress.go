@@ -2,27 +2,22 @@ package payload
 
 import (
 	"cosmossdk.io/math"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
-
-	"github.com/InjectiveLabs/chain-stresser/v2/chain"
-	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
 )
 
 var _ TxProvider = &ethSendProvider{}
 
 type ethSendProvider struct {
+	ethTxBuilderAndSigner
+
 	sendAmount  sdk.Coin
 	minGasPrice sdk.Coin
 	maxGasLimit uint64
-	ethSigner   ethtypes.Signer
 }
 
 // eip1559InitiaBaseFee defines the initial base fee for EIP-1559 transactions.
@@ -61,10 +56,14 @@ func NewEthSendProvider(
 	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
 
 	provider := &ethSendProvider{
+		ethTxBuilderAndSigner: ethTxBuilderAndSigner{
+			ethSigner: ethSigner,
+			feeDenom:  parsedMinGasPrice.Denom,
+		},
+
 		sendAmount:  parsedAmount,
 		minGasPrice: parsedMinGasPrice,
-		maxGasLimit: 200000,
-		ethSigner:   ethSigner,
+		maxGasLimit: 25000,
 	}
 
 	return provider, nil
@@ -115,55 +114,8 @@ func (p *ethSendProvider) GenerateTx(
 	return tx, nil
 }
 
-func (p *ethSendProvider) BuildAndSignTx(
-	client chain.Client,
-	unsignedTx Tx,
-) (signedTx Tx, err error) {
-	ethTxMsg := unsignedTx.Msgs()[0].(*evmtypes.MsgEthereumTx)
-	txHash := p.ethSigner.Hash(ethTxMsg.Raw.Transaction)
-
-	privKey := &ethsecp256k1.PrivKey{
-		Key: unsignedTx.From().Key,
-	}
-
-	sig, err := ethcrypto.Sign(txHash.Bytes(), privKey.ToECDSA())
-	if err != nil {
-		err = errors.Wrap(err, "failed to sign tx hash")
-		return nil, err
-	}
-
-	ethTxMsg.Raw.Transaction, err =
-		ethTxMsg.Raw.Transaction.WithSignature(p.ethSigner, sig)
-	if err != nil {
-		err = errors.Wrap(err, "failed to update tx with signature")
-		return nil, err
-	}
-
-	ethTxMsg.From = privKey.PubKey().Address().Bytes()
-
-	txBuilder := client.TxConfig().NewTxBuilder()
-
-	ethTxOpt, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-	if err != nil {
-		err := errors.New("failed to init NewAnyWithValue for ExtensionOptionsEthereumTx")
-		return nil, err
-	}
-
-	builder, ok := txBuilder.(authtx.ExtensionOptionsTxBuilder)
-	if !ok {
-		err := errors.New("txBuilder isn't authtx.ExtensionOptionsTxBuilder")
-		return nil, err
-	} else {
-		builder.SetExtensionOptions(ethTxOpt)
-	}
-
-	tx, err := ethTxMsg.BuildTx(builder, p.minGasPrice.Denom)
-	if err != nil {
-		err = errors.Wrap(err, "failed to build MsgEthereumTx")
-		return nil, err
-	}
-
-	out := *(unsignedTx.(*ethSendTx))
-	out.txBytes = client.Encode(tx)
-	return &out, nil
+func (p *ethSendProvider) GenerateInitialTx(
+	req TxRequest,
+) (Tx, error) {
+	return nil, nil
 }

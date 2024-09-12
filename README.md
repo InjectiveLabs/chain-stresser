@@ -6,7 +6,6 @@ Our benchamark tool for stress testing the Injective Chain. Configures devnets o
 
 ```
 git clone https://github.com/InjectiveLabs/chain-stresser.git && cd chain-stresser
-git checkout v2
 make install
 ```
 
@@ -19,16 +18,20 @@ Usage:
 Available Commands:
   generate     Generates all the config files required to start injectived cluster with state for stress testing.
   tx-bank-send Run stresstest with x/bank.MsgSend transactions.
+  tx-eth-call  Run stresstest with eth contract call transactions.
   tx-eth-send  Run stresstest with eth value send transactions.
 
 Flags:
       --accounts string        Path to a JSON file containing private keys of accounts to use for stress testing. (default "accounts.json")
       --accounts-num int       Number of accounts used to benchmark the node in parallel, must not be greater than the number of keys available in account file. (default 1000)
+      --await                  Await for transaction to be included in a block.
       --chain-id string        Expected ID of the chain. (default "stressinj-1337")
   -h, --help                   help for chain-stresser
       --min-gas-price string   Minimum gas price to pay for each transaction. (default "1inj")
       --node-addr string       Address of a injectived node RPC to connect to. (default "localhost:26657")
       --transactions int       Number of transactions to allocate for each account. (default 100)
+
+Use "chain-stresser [command] --help" for more information about a command.
 ```
 
 ## Example
@@ -50,6 +53,22 @@ Run a stress test against this node (in separate tab):
 ```
 chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accounts.json
 ```
+
+## Querying EVM State
+
+Use one of the benchmarks that deploy a contract and update its state. For example, `tx-eth-call` uses a [Counter.sol](./contracts/solidity/Counter.sol) contract. You can access its state after benchmark ends using [etherman](https://github.com/InjectiveLabs/etherman) tool.
+
+```
+make eth-counter-get contract=0x000...
+```
+
+Or use a full CLI command:
+
+```
+etherman -N Counter -S ./contracts/solidity/Counter.sol call 0x000... getCount
+```
+
+See `etherman --help` for more info.
 
 ## License
 

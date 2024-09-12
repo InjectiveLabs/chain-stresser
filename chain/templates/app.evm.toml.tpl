@@ -305,4 +305,4 @@ stop-node-on-err = true
 #
 # Note, this configuration only applies to SDK built-in app-side mempool
 # implementations.
-max-txs = -1
+max-txs = 500000

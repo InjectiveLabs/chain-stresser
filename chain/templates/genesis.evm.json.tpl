@@ -5,7 +5,7 @@
   "consensus_params": {
     "block": {
       "max_bytes": "104857600",
-      "max_gas": "1000000000"
+      "max_gas": "10000000000"
     },
     "evidence": {
       "max_age_num_blocks": "100000",
@@ -236,7 +236,7 @@
         "min_gas_price": "0.000000000000000000",
         "min_gas_multiplier": "0.500000000000000000"
       },
-      "block_gas": "1000000000"
+      "block_gas": "10000000000"
     },
     "genutil": {
       "gen_txs": []
