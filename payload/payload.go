@@ -47,6 +47,7 @@ type Tx interface {
 
 	From() chain.Account
 	Msgs() []sdk.Msg
+	WithBytes(txBytes []byte) Tx
 	Bytes() []byte
 }
 
@@ -69,6 +70,14 @@ func (t *baseTx) From() chain.Account {
 
 func (t *baseTx) Msgs() []sdk.Msg {
 	return t.msgs
+}
+
+func (t *baseTx) WithBytes(txBytes []byte) Tx {
+	tc := *t
+
+	tc.txBytes = txBytes
+
+	return &tc
 }
 
 func (t *baseTx) Bytes() []byte {

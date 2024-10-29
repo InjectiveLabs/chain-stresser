@@ -37,6 +37,8 @@ type StressConfig struct {
 	AwaitTxConfirmation bool
 }
 
+var errRetry = errors.New("retry required")
+
 func Stress(
 	ctx context.Context,
 	config StressConfig,
@@ -197,21 +199,36 @@ func Stress(
 
 					spawn(fmt.Sprintf("account-%d", i), parallel.Continue, func(ctx context.Context) error {
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
-							tx := accountTxs[txIndex]
 
-							txHash, err := accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
-							if err != nil {
-								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
-									logger.WithError(err).WithFields(log.Fields{
-										"expectedSequence": expectedAccSeq,
-									}).Warning("⚠️ Tx broadcasting failed, trying suggested sequence")
+							var txHash string
 
-									txIndex = int(expectedAccSeq - initialSequence)
-									continue
-								}
+							if finalErr := retry.Do(
+								func() (err error) {
+									tx := accountTxs[txIndex]
 
-								err = errors.Wrap(err, "⚠️ Tx broadcasting error")
-								return err
+									txHash, err = accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
+									if err != nil {
+										if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
+											logger.WithError(err).WithFields(log.Fields{
+												"expectedSequence": expectedAccSeq,
+											}).Warning("⚠️ Tx broadcasting failed, trying suggested sequence")
+
+											txIndex = int(expectedAccSeq - initialSequence)
+											return errRetry
+										} else if chain.IsMempoolFullError(err) {
+											return errRetry
+										}
+
+										err = errors.Wrap(err, "⚠️ Tx broadcasting error")
+										return retry.Unrecoverable(err)
+									}
+
+									return nil
+								},
+								retry.UntilSucceeded(),
+								retry.Delay(time.Second),
+							); finalErr != nil {
+								return finalErr
 							}
 
 							broadcastTxPace.Step(1)

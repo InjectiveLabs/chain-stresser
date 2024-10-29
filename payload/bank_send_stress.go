@@ -105,10 +105,8 @@ func (p *bankSendProvider) BuildAndSignTx(
 		return nil, err
 	}
 
-	encodedTx := client.Encode(signedResult)
-	tx := *(unsignedTx.(*bankSendTx))
-	tx.txBytes = encodedTx
-	return &tx, nil
+	tx := unsignedTx.WithBytes(client.Encode(signedResult))
+	return tx, nil
 }
 
 func (p *bankSendProvider) GenerateInitialTx(

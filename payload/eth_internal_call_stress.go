@@ -12,14 +12,14 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
-	log "github.com/xlab/suplog"
 
-	contract "github.com/InjectiveLabs/chain-stresser/v2/contracts/solidity/Counter"
+	contract "github.com/InjectiveLabs/chain-stresser/v2/contracts/solidity/BenchmarkInternalCall"
+	log "github.com/xlab/suplog"
 )
 
-var _ TxProvider = &ethCallProvider{}
+var _ TxProvider = &ethInternalCallProvider{}
 
-type ethCallProvider struct {
+type ethInternalCallProvider struct {
 	ethTxBuilderAndSigner
 
 	logger log.Logger
@@ -27,18 +27,26 @@ type ethCallProvider struct {
 	minGasPrice           sdk.Coin
 	maxGasLimit           uint64
 	maxGasLimitDeployment uint64
+	iterations            uint64
 
 	contractMetaData *bind.MetaData
 	contractABI      *abi.ABI
 	contractAddress  ethcmn.Address
 }
 
-// NewEthCallProvider creates transaction factory for stress testing
-// Solidity contract transacting from multiple accounts.
-func NewEthCallProvider(
+const defaultEthInternalCallIterations = 10000
+
+// NewEthInternalCallProvider creates transaction factory for stress testing
+// Solidity contract calling internal contract.
+func NewEthInternalCallProvider(
 	chainID string,
 	minGasPrice string,
+	iterations uint64,
 ) (TxProvider, error) {
+	if iterations == 0 {
+		iterations = defaultEthInternalCallIterations
+	}
+
 	parsedMinGasPrice, err := sdk.ParseCoinNormalized(minGasPrice)
 	if err != nil {
 		err = errors.Wrap(err, "failed to parse minGasPrice coin")
@@ -58,21 +66,22 @@ func NewEthCallProvider(
 
 	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
 
-	provider := &ethCallProvider{
+	provider := &ethInternalCallProvider{
 		ethTxBuilderAndSigner: ethTxBuilderAndSigner{
 			ethSigner: ethSigner,
 			feeDenom:  parsedMinGasPrice.Denom,
 		},
 
 		minGasPrice:           parsedMinGasPrice,
-		maxGasLimit:           200000,
+		maxGasLimit:           15000 * iterations,
 		maxGasLimitDeployment: 500000,
-		contractMetaData:      contract.CounterMetaData,
+		contractMetaData:      contract.BenchmarkInternalCallMetaData,
+		iterations:            iterations,
 	}
 
-	contractABI, err := contract.CounterMetaData.GetAbi()
+	contractABI, err := contract.BenchmarkInternalCallMetaData.GetAbi()
 	if err != nil {
-		err = errors.Wrap(err, "failed to parse Counter contract ABI")
+		err = errors.Wrap(err, "failed to parse BenchmarkInternalCall contract ABI")
 		return nil, err
 	} else {
 		provider.contractABI = contractABI
@@ -85,32 +94,30 @@ func NewEthCallProvider(
 	return provider, nil
 }
 
-type ethCallTx struct {
+type ethInternalCallTx struct {
 	baseTx
 
 	to ethcmn.Address
 }
 
-func (p *ethCallProvider) Name() string {
-	return "eth_call_stress"
+func (p *ethInternalCallProvider) Name() string {
+	return "eth_internal_call_stress"
 }
 
-var noValue = big.NewInt(0)
-
-func (p *ethCallProvider) GenerateTx(
+func (p *ethInternalCallProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
 	if p.contractAddress == (ethcmn.Address{}) {
 		return nil, errors.New("contract address is not set")
 	}
 
-	// increase the counter!
-	callData, err := p.contractABI.Pack("increase")
+	// run the heavy call!
+	callData, err := p.contractABI.Pack("benchmarkInternalCall", big.NewInt(int64(p.iterations)))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to pack contract call data")
 	}
 
-	tx := &ethCallTx{
+	tx := &ethInternalCallTx{
 		baseTx: baseTx{
 			from: req.From,
 			msgs: []sdk.Msg{
@@ -134,10 +141,10 @@ func (p *ethCallProvider) GenerateTx(
 	return tx, nil
 }
 
-func (p *ethCallProvider) GenerateInitialTx(
+func (p *ethInternalCallProvider) GenerateInitialTx(
 	req TxRequest,
 ) (Tx, error) {
-	tx := &ethCallTx{
+	tx := &ethInternalCallTx{
 		baseTx: baseTx{
 			from: req.From,
 			msgs: []sdk.Msg{
@@ -158,7 +165,7 @@ func (p *ethCallProvider) GenerateInitialTx(
 
 	ethFrom := ethcmn.BytesToAddress(req.From.Key.PubKey().Address().Bytes())
 	p.contractAddress = ethcrypto.CreateAddress(ethFrom, req.From.Sequence)
-	p.logger.WithField("address", p.contractAddress.String()).Infoln("Provisioned Counter contract address")
+	p.logger.WithField("address", p.contractAddress.String()).Infoln("Provisioned BenchmarkInternalCall contract address")
 
 	return tx, nil
 }

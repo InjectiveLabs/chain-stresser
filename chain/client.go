@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
@@ -110,7 +111,7 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 		txHash = res.Hash.String()
 		if res.Code != 0 {
 			if err := checkSequence(res.Codespace, res.Code, res.Log); err != nil {
-				return "", err
+				return txHash, err
 			}
 
 			err := errors.Errorf(
@@ -121,7 +122,7 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 				res.Log,
 			)
 
-			return "", err
+			return txHash, err
 		}
 	}
 
@@ -326,4 +327,12 @@ func IsSequenceError(err error) (uint64, bool) {
 	}
 
 	return 0, false
+}
+
+func IsMempoolFullError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), "mempool is full")
 }

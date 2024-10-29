@@ -157,6 +157,54 @@ func main() {
 	}
 	rootCmd.AddCommand(txEthCallCmd)
 
+	txEthDeployCmd := &cobra.Command{
+		Use:   "tx-eth-deploy",
+		Short: "Run stresstest with eth contract deploy transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			ethDeployProvider, err := payload.NewEthDeployProvider(stressCfg.ChainID, stressCfg.MinGasPrice)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate eth contract deploy stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, ethDeployProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txEthDeployCmd)
+
+	var ethInternalCallIterations uint64
+	txEthInternalCallCmd := &cobra.Command{
+		Use:   "tx-eth-internal-call",
+		Short: "Run stresstest with eth contract internal call transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			ethCallProvider, err := payload.NewEthInternalCallProvider(
+				stressCfg.ChainID,
+				stressCfg.MinGasPrice,
+				ethInternalCallIterations,
+			)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate eth contract internal call stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, ethCallProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	txEthInternalCallCmd.Flags().Uint64Var(&ethInternalCallIterations, "iterations", 10000, "Number of internal call iterations to run for each external tx")
+	rootCmd.AddCommand(txEthInternalCallCmd)
+
 	orPanic(rootCmd.Execute())
 }
 

@@ -65,7 +65,6 @@ func (s *ethTxBuilderAndSigner) BuildAndSignTx(
 		return nil, err
 	}
 
-	out := *(unsignedTx.(*ethCallTx))
-	out.txBytes = client.Encode(tx)
-	return &out, nil
+	signedTx = unsignedTx.WithBytes(client.Encode(tx))
+	return signedTx, nil
 }
