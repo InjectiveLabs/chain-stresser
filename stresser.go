@@ -200,11 +200,14 @@ func Stress(
 					spawn(fmt.Sprintf("account-%d", i), parallel.Continue, func(ctx context.Context) error {
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 
+							var txIndexOffset *int
+							*txIndexOffset = 0
+
 							var txHash string
 
 							if finalErr := retry.Do(
 								func() (err error) {
-									tx := accountTxs[txIndex]
+									tx := accountTxs[txIndex+*txIndexOffset]
 
 									txHash, err = accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
 									if err != nil {
@@ -213,9 +216,11 @@ func Stress(
 												"expectedSequence": expectedAccSeq,
 											}).Warning("⚠️ Tx broadcasting failed, trying suggested sequence")
 
-											txIndex = int(expectedAccSeq - initialSequence)
+											*txIndexOffset = int(expectedAccSeq-initialSequence) - txIndex
 											return errRetry
-										} else if chain.IsMempoolFullError(err) {
+										}
+
+										if chain.IsMempoolFullError(err) {
 											return errRetry
 										}
 
@@ -223,20 +228,22 @@ func Stress(
 										return retry.Unrecoverable(err)
 									}
 
+									*txIndexOffset = *txIndexOffset + 1
 									return nil
 								},
 								retry.UntilSucceeded(),
 								retry.Delay(time.Second),
 							); finalErr != nil {
+								txIndex = txIndex + *txIndexOffset
 								return finalErr
 							}
+
+							txIndex = txIndex + *txIndexOffset
 
 							broadcastTxPace.Step(1)
 							logger.WithFields(log.Fields{
 								"txHash": txHash,
 							}).Debug("✅ Tx broadcasted")
-
-							txIndex++
 						}
 
 						return nil

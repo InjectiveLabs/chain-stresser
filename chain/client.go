@@ -114,6 +114,10 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 				return txHash, err
 			}
 
+			if err := checkNonce(res.Codespace, res.Code, res.Log); err != nil {
+				return txHash, err
+			}
+
 			err := errors.Errorf(
 				"node returned non-zero code for tx '%s' (code: %d, codespace: %s): %s",
 				txHash,
@@ -288,6 +292,7 @@ func (e sequenceError) Error() string {
 }
 
 var expectedSequenceRegExp = regexp.MustCompile(`account sequence mismatch, expected (\d+), got \d+`)
+var expectedNonceRegExp = regexp.MustCompile(`invalid nonce; got (\d+), expected \d+`)
 
 func isSDKErrorResult(codespace string, code uint32, sdkErr *errorsmod.Error) bool {
 	return codespace == sdkErr.Codespace() &&
@@ -310,6 +315,27 @@ func checkSequence(codespace string, code uint32, log string) error {
 	expectedSequence, err := strconv.ParseUint(matches[1], 10, 64)
 	if err != nil {
 		return errors.Wrapf(err, "can't parse expected sequence number, log mesage received: %s", log)
+	}
+
+	return errors.WithStack(sequenceError{
+		message:          log,
+		expectedSequence: expectedSequence,
+	})
+}
+
+func checkNonce(codespace string, code uint32, log string) error {
+	if !isSDKErrorResult(codespace, code, cosmoserrors.ErrInvalidSequence) {
+		return nil
+	}
+
+	matches := expectedNonceRegExp.FindStringSubmatch(log)
+	if len(matches) != 2 {
+		return errors.Errorf("cosmos sdk hasn't returned expected nonce number, log mesage received: %s", log)
+	}
+
+	expectedSequence, err := strconv.ParseUint(matches[1], 10, 64)
+	if err != nil {
+		return errors.Wrapf(err, "can't parse expected nonce number, log mesage received: %s", log)
 	}
 
 	return errors.WithStack(sequenceError{

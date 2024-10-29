@@ -63,7 +63,7 @@ func NewEthSendProvider(
 
 		sendAmount:  parsedAmount,
 		minGasPrice: parsedMinGasPrice,
-		maxGasLimit: 25000,
+		maxGasLimit: 21000,
 	}
 
 	return provider, nil

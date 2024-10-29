@@ -65,8 +65,8 @@ func NewEthCallProvider(
 		},
 
 		minGasPrice:           parsedMinGasPrice,
-		maxGasLimit:           200000,
-		maxGasLimitDeployment: 500000,
+		maxGasLimit:           100000,
+		maxGasLimitDeployment: 250000,
 		contractMetaData:      contract.CounterMetaData,
 	}
 
