@@ -34,7 +34,7 @@ type ethInternalCallProvider struct {
 	contractAddress  ethcmn.Address
 }
 
-const defaultEthInternalCallIterations = 10000
+const defaultEthInternalCallIterations = 100
 
 // NewEthInternalCallProvider creates transaction factory for stress testing
 // Solidity contract calling internal contract.
@@ -73,8 +73,8 @@ func NewEthInternalCallProvider(
 		},
 
 		minGasPrice:           parsedMinGasPrice,
-		maxGasLimit:           15000 * iterations,
-		maxGasLimitDeployment: 500000,
+		maxGasLimit:           28809 + 2500*iterations,
+		maxGasLimitDeployment: 320000,
 		contractMetaData:      contract.BenchmarkInternalCallMetaData,
 		iterations:            iterations,
 	}

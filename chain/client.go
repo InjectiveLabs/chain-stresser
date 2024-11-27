@@ -10,6 +10,7 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
+	retry "github.com/avast/retry-go/v4"
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	cosmoserrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -23,6 +24,8 @@ const (
 	confirmTimeout             = 10 * time.Minute
 	defaultBroadcastStatusPoll = 1 * time.Second
 )
+
+var errRetry = errors.New("retry required")
 
 // TODO: replace with https://github.com/InjectiveLabs/sdk-go/tree/master/client/chain
 func NewClient(chainID string, addr string) Client {
@@ -94,40 +97,66 @@ func (c Client) Encode(signedTx authsigning.Tx) []byte {
 }
 
 func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (string, error) {
-	var txHash string
 	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	res, err := c.clientCtx.Client.BroadcastTxSync(requestCtx, encodedTx)
-	if err != nil {
-		errRes := client.CheckCometError(err, encodedTx)
-		if !isTxInMempool(errRes) {
-			return "", errors.WithStack(err)
-		}
+	var txHash string
 
-		// tx in mempool - all is ok
-		txHash = errRes.TxHash
-	} else {
-		txHash = res.Hash.String()
-		if res.Code != 0 {
-			if err := checkSequence(res.Codespace, res.Code, res.Log); err != nil {
-				return txHash, err
+	retryOpts := []retry.Option{
+		retry.UntilSucceeded(),
+		retry.MaxDelay(10 * time.Second),
+		retry.MaxJitter(time.Second),
+		retry.DelayType(retry.RandomDelay),
+	}
+
+	// copy bytes just in case
+	encodedTxBody := append([]byte{}, encodedTx...)
+
+	if finalError := retry.Do(
+		func() error {
+			res, err := c.clientCtx.Client.BroadcastTxSync(requestCtx, encodedTxBody)
+			if err != nil {
+				errRes := client.CheckCometError(err, encodedTxBody)
+				if isMempoolFull(errRes) {
+					return errRetry
+				}
+
+				if !isTxInMempool(errRes) {
+					return retry.Unrecoverable(errors.WithStack(err))
+				}
+
+				// tx in mempool - all is ok
+				txHash = errRes.TxHash
+				return nil
 			}
 
-			if err := checkNonce(res.Codespace, res.Code, res.Log); err != nil {
-				return txHash, err
+			txHash = res.Hash.String()
+
+			if res.Code != 0 {
+				if err := checkSequence(res.Codespace, res.Code, res.Log); err != nil {
+					return retry.Unrecoverable(err)
+				}
+
+				if err := checkNonce(res.Codespace, res.Code, res.Log); err != nil {
+					return retry.Unrecoverable(err)
+				}
+
+				err := errors.Errorf(
+					"node returned non-zero code for tx '%s' (code: %d, codespace: %s): %s",
+					txHash,
+					res.Code,
+					res.Codespace,
+					res.Log,
+				)
+
+				return retry.Unrecoverable(err)
 			}
 
-			err := errors.Errorf(
-				"node returned non-zero code for tx '%s' (code: %d, codespace: %s): %s",
-				txHash,
-				res.Code,
-				res.Codespace,
-				res.Log,
-			)
-
-			return txHash, err
-		}
+			return nil
+		},
+		retryOpts...,
+	); finalError != nil {
+		return txHash, finalError
 	}
 
 	txHashBytes, err := hex.DecodeString(txHash)
@@ -169,6 +198,10 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 					return "", err
 				}
 
+				if err := checkNonce(res.Codespace, res.Code, res.Log); err != nil {
+					return "", err
+				}
+
 				err = errors.Errorf(
 					"node returned non-zero code for tx '%s' (code: %d, codespace: %s): %s",
 					txHash,
@@ -196,6 +229,15 @@ func isTxInMempool(errRes *sdk.TxResponse) bool {
 
 	return errRes.Codespace == cosmoserrors.ErrTxInMempoolCache.Codespace() &&
 		errRes.Code == cosmoserrors.ErrTxInMempoolCache.ABCICode()
+}
+
+func isMempoolFull(errRes *sdk.TxResponse) bool {
+	if errRes == nil {
+		return false
+	}
+
+	return errRes.Codespace == cosmoserrors.ErrMempoolIsFull.Codespace() &&
+		errRes.Code == cosmoserrors.ErrMempoolIsFull.ABCICode()
 }
 
 func buildAndSignTx(
@@ -292,7 +334,7 @@ func (e sequenceError) Error() string {
 }
 
 var expectedSequenceRegExp = regexp.MustCompile(`account sequence mismatch, expected (\d+), got \d+`)
-var expectedNonceRegExp = regexp.MustCompile(`invalid nonce; got (\d+), expected \d+`)
+var expectedNonceRegExp = regexp.MustCompile(`invalid nonce; got \d+, expected (\d+)`)
 
 func isSDKErrorResult(codespace string, code uint32, sdkErr *errorsmod.Error) bool {
 	return codespace == sdkErr.Codespace() &&

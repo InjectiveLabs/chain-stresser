@@ -26,6 +26,10 @@ const (
 	defaultNumOfInstances  = 1
 )
 
+var (
+	verboseOutput = false
+)
+
 func init() {
 	// ignore debugging stuff by default
 	log.DefaultLogger.SetLevel(log.InfoLevel)
@@ -64,7 +68,8 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&stressCfg.ChainID, "chain-id", defaultChainID, "Expected ID of the chain.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.MinGasPrice, "min-gas-price", defaultMinGasPrice, "Minimum gas price to pay for each transaction.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "localhost:26657", "Address of a injectived node RPC to connect to.")
-	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", false, "Await for transaction to be included in a block.")
+	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", true, "Await for transaction to be included in a block.")
+	rootCmd.PersistentFlags().BoolVar(&verboseOutput, "verbose", false, "Verbosely output debugging information.")
 	rootCmd.PersistentFlags().StringVar(&accountFile, "accounts", "accounts.json", "Path to a JSON file containing private keys of accounts to use for stress testing.")
 	rootCmd.PersistentFlags().IntVar(&numOfAccounts, "accounts-num", defaultNumOfAccounts, "Number of accounts used to benchmark the node in parallel, must not be greater than the number of keys available in account file.")
 	rootCmd.PersistentFlags().IntVar(&stressCfg.NumOfTransactions, "transactions", defaultNumOfTx, "Number of transactions to allocate for each account.")
@@ -78,6 +83,10 @@ func main() {
 		Use:   "generate",
 		Short: "Generates all the config files required to start injectived cluster with state for stress testing.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			stresser.GenerateConfigs(genEnv)
 			return nil
 		},
@@ -96,6 +105,10 @@ func main() {
 		Use:   "tx-bank-send",
 		Short: "Run stresstest with x/bank.MsgSend transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			sendAmount := "1" + chain.DefaultBondDenom
@@ -118,6 +131,10 @@ func main() {
 		Use:   "tx-eth-send",
 		Short: "Run stresstest with eth value send transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			sendAmount := "1" + chain.DefaultBondDenom
@@ -140,6 +157,10 @@ func main() {
 		Use:   "tx-eth-call",
 		Short: "Run stresstest with eth contract call transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			ethCallProvider, err := payload.NewEthCallProvider(stressCfg.ChainID, stressCfg.MinGasPrice)
@@ -161,6 +182,10 @@ func main() {
 		Use:   "tx-eth-deploy",
 		Short: "Run stresstest with eth contract deploy transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			ethDeployProvider, err := payload.NewEthDeployProvider(stressCfg.ChainID, stressCfg.MinGasPrice)
@@ -183,6 +208,10 @@ func main() {
 		Use:   "tx-eth-internal-call",
 		Short: "Run stresstest with eth contract internal call transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			ethCallProvider, err := payload.NewEthInternalCallProvider(
@@ -202,7 +231,7 @@ func main() {
 			return nil
 		},
 	}
-	txEthInternalCallCmd.Flags().Uint64Var(&ethInternalCallIterations, "iterations", 10000, "Number of internal call iterations to run for each external tx")
+	txEthInternalCallCmd.Flags().Uint64Var(&ethInternalCallIterations, "iterations", 10, "Number of internal call iterations to run for each external tx")
 	rootCmd.AddCommand(txEthInternalCallCmd)
 
 	orPanic(rootCmd.Execute())
