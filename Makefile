@@ -19,7 +19,7 @@ gen-0:
 	chain-stresser generate --accounts-num 1000 --validators 1 --sentries 0 --instances 1 --evm true
 
 val-0-start:
-	injectived --home="./chain-stresser-deploy/validators/0" start --json-rpc.api eth,web3,net --trace
+	injectived --home="./chain-stresser-deploy/validators/0" start
 
 val-0-clean:
 	injectived --home="./chain-stresser-deploy/validators/0" tendermint unsafe-reset-all

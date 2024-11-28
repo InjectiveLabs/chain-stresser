@@ -2,11 +2,11 @@ package payload
 
 import (
 	"cosmossdk.io/math"
+	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
+	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	ethermint "github.com/evmos/ethermint/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
 
@@ -47,7 +47,7 @@ func NewEthSendProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := ethermint.ParseChainID(chainID)
+	parsedChainID, err := chaintypes.ParseChainID(chainID)
 	if err != nil {
 		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
 		return nil, err

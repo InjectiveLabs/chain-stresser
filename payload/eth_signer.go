@@ -2,11 +2,11 @@ package payload
 
 import (
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
+	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"

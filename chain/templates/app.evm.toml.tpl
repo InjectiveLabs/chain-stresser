@@ -182,76 +182,88 @@ max-send-msg-size = "2147483647"
 enable = true
 
 ###############################################################################
-###                   	  EVM JSON-RPC Configuration                        ###
+###                             EVM Configuration                           ###
+###############################################################################
+
+[evm]
+
+# Tracer defines the 'vm.Tracer' type that the EVM will use when the node is run in
+# debug mode. To enable tracing use the '--evm.tracer' flag when starting your node.
+# Valid types are: json|struct|access_list|markdown
+tracer = ""
+
+# MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
+max-tx-gas-wanted = 0
+
+###############################################################################
+###                           JSON RPC Configuration                        ###
 ###############################################################################
 
 [json-rpc]
 
-# Define if the JSON-RPC server should be enabled.
+# Enable defines if the gRPC server should be enabled.
 enable = true
 
-# Defines a list of JSON-RPC namespaces that should be enabled.
-api = ["eth", "net", "web3"]
-
-# The JSON-RPC server address to listen on.
+# Address defines the EVM RPC HTTP server address to bind to.
 address = "127.0.0.1:8545"
 
-# The JSON-RPC WS server address to listen on.
+# Address defines the EVM WebSocket server address to bind to.
 ws-address = "127.0.0.1:8546"
 
-# Sets a cap on gas that can be used in eth_call/estimateGas unit is aphoton (0=infinite).
+# API defines a list of JSON-RPC namespaces that should be enabled
+# Example: "eth,txpool,personal,net,debug,web3"
+api = "eth,net,web3"
+
+# GasCap sets a cap on gas that can be used in eth_call/estimateGas (0=infinite).
 gas-cap = 25000000
 
-# Sets a cap on transaction fee that can be sent via the RPC APIs (1 = default 1 photon).
+# EVMTimeout is the global timeout for eth_call. Default: 5s.
 evm-timeout = "5s"
 
-# Sets the global cap for total number of filters that can be created.
+# TxFeeCap is the global tx-fee cap for send transaction. Default: 1eth.
 txfee-cap = 1
 
-# Sets a timeout used for eth_call (0=infinite).
+# FilterCap sets the global cap for total number of filters that can be created
 filter-cap = 200
 
-# Sets a read/write timeout for JSON-RPC HTTP server (0=infinite).
+# FeeHistoryCap sets the global cap for total number of blocks that can be fetched
+feehistory-cap = 100
+
+# LogsCap defines the max number of results can be returned from single 'eth_getLogs' query.
 logs-cap = 10000
 
-# Sets a idle timeout for JSON-RPC HTTP server (0=infinite).
+# BlockRangeCap defines the max block range allowed for 'eth_getLogs' query.
 block-range-cap = 10000
 
-# Allow for unprotected (non EIP155 signed) transactions to be submitted via the node's RPC when the global parameter is disabled.
+# HTTPTimeout is the read/write timeout of http json-rpc server.
 http-timeout = "30s"
 
-# Sets the max number of results can be returned from single eth_getLogs query.
+# HTTPIdleTimeout is the idle timeout of http json-rpc server.
 http-idle-timeout = "2m0s"
 
-# Sets the max block range allowed for eth_getLogs query.
+# AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
+# the node's RPC when the global parameter is disabled.
 allow-unprotected-txs = false
 
-# Sets the maximum number of simultaneous connections for the server listener.
+# MaxOpenConnections sets the maximum number of simultaneous connections
+# for the server listener.
 max-open-connections = 0
 
-# Enable the custom tx indexer for JSON-RPC.
-enable-indexer = false
+# EnableIndexer enables the custom transaction indexer for the EVM (ethereum transactions).
+enable-indexer = true
 
-# Allow block gap for the custom tx indexer for JSON-RPC.
+# AllowIndexerGap allow block gap for the custom transaction indexer for the EVM (ethereum transactions).
 allow-indexer-gap = true
 
 # Define if JSON-RPC metrics server should be enabled.
 metrics = false
 
-# Set the address for the JSON-RPC metrics server.
+# MetricsAddress defines the EVM Metrics server address to bind to.
+# Prometheus metrics path: /debug/metrics/prometheus
 metrics-address = "127.0.0.1:6065"
 
-###############################################################################
-###                   	      EVM Configuration                             ###
-###############################################################################
-
-[evm]
-
-# The EVM tracer type to collect execution traces from the EVM transaction execution (json|struct|access_list|markdown).
-tracer = ""
-
-# The gas wanted for each eth tx returned in ante handler in check tx mode.
-max-tx-gas-wanted = 0
+# Maximum number of bytes returned from eth_call or similar invocations.
+return-data-limit = 512000
 
 ###############################################################################
 ###                        State Sync Configuration                         ###

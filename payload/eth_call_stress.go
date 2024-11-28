@@ -3,14 +3,14 @@ package payload
 import (
 	"math/big"
 
+	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
+	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	ethermint "github.com/evmos/ethermint/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
 
@@ -50,7 +50,7 @@ func NewEthCallProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := ethermint.ParseChainID(chainID)
+	parsedChainID, err := chaintypes.ParseChainID(chainID)
 	if err != nil {
 		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
 		return nil, err

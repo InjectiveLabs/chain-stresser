@@ -1,8 +1,9 @@
 package payload
 
 import (
-	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 )
 
 type TxRequest struct {
