@@ -8,7 +8,9 @@ import (
 
 	retry "github.com/avast/retry-go/v4"
 	"github.com/dottedmag/parallel"
+	"github.com/gammazero/workerpool"
 	"github.com/pkg/errors"
+	"github.com/xlab/catcher"
 	"github.com/xlab/pace"
 	log "github.com/xlab/suplog"
 
@@ -37,6 +39,10 @@ type StressConfig struct {
 	AwaitTxConfirmation bool
 }
 
+// maxParallelInitialTxsBroadcasts is the maximum number of initial txs to broadcast in parallel.
+// this is internal to the stresser and not configurable for now.
+const maxParallelInitialTxsBroadcasts = 8
+
 func Stress(
 	ctx context.Context,
 	config StressConfig,
@@ -46,8 +52,9 @@ func Stress(
 	client := chain.NewClient(config.ChainID, config.NodeAddress)
 
 	startTs := time.Now()
-	signedTxPace := pace.New("signed tx", 10*time.Second, newPaceReporter(logger))
-	getAccountNumberSequencePace := pace.New("sequence fetched", 10*time.Second, newPaceReporter(logger))
+	signedTxPace := pace.New("signed tx", 10*time.Second, NewPaceReporter(logger))
+	getAccountNumberSequencePace := pace.New("sequence fetched", 10*time.Second, NewPaceReporter(logger))
+	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
 
 	numOfAccounts := len(config.Accounts)
 	logger.WithFields(log.Fields{
@@ -63,6 +70,11 @@ func Stress(
 
 		for n := 0; n < runtime.NumCPU(); n++ {
 			spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
+				defer catcher.Catch(
+					catcher.RecvLog(true),
+					catcher.RecvDie(1, true),
+				)
+
 				for {
 					select {
 					case <-ctx.Done():
@@ -94,12 +106,27 @@ func Stress(
 				getAccountNumberSequencePace.Pause()
 			}()
 
+			defer catcher.Catch(
+				catcher.RecvLog(true),
+				catcher.RecvDie(1, true),
+			)
+
 			if len(config.Accounts) == 0 {
 				return errors.New("empty accounts list")
 			} else {
 				// this ensures that the state required for benchmark is correctly initialized
-				// for EVM transactions this usually deploys a smart contract.
-				orPanic(createAndBroadcastInitialTx(ctx, logger, client, txProvider, config.Accounts[0]))
+				// for EVM transactions this usually deploys a smart contract. We can do it for each account
+				// if some account state needs to be initialized as well.
+				orPanic(createAndBroadcastInitialTxs(
+					ctx,
+					logger,
+					signedTxPace,
+					getAccountNumberSequencePace,
+					broadcastTxPace,
+					client,
+					txProvider,
+					config.Accounts,
+				))
 			}
 
 			initialAccountSequences = make([]uint64, numOfAccounts)
@@ -153,6 +180,11 @@ func Stress(
 				signedTxPace.Pause()
 			}()
 
+			defer catcher.Catch(
+				catcher.RecvLog(true),
+				catcher.RecvDie(1, true),
+			)
+
 			signedTxs = make([][][]byte, numOfAccounts)
 			for i := 0; i < numOfAccounts; i++ {
 				signedTxs[i] = make([][]byte, config.NumOfTransactions)
@@ -183,7 +215,6 @@ func Stress(
 		"elapsed": time.Since(startTs),
 	}).Infof("Transactions prepared 🙌")
 
-	broadcastTxPace := pace.New("sent tx", 10*time.Second, newPaceReporter(logger))
 	startTs = time.Now()
 
 	logger.Info("Broadcasting transactions 🚀")
@@ -198,6 +229,11 @@ func Stress(
 					accountClient := chain.NewClient(config.ChainID, config.NodeAddress)
 
 					spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
+						defer catcher.Catch(
+							catcher.RecvLog(true),
+							catcher.RecvDie(1, true),
+						)
+
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 							tx := accountTxs[txIndex]
 
@@ -280,61 +316,113 @@ func getAccountNumberSequence(
 	return accNum, accSeq, nil
 }
 
-func createAndBroadcastInitialTx(
+func createAndBroadcastInitialTxs(
 	ctx context.Context,
 	logger log.Logger,
+	signedTxPace,
+	getAccountNumberSequencePace,
+	broadcastTxPace pace.Pace,
 	client chain.Client,
 	provider payload.TxProvider,
-	fromPrivateKey chain.Secp256k1PrivateKey,
+	fromPrivateKeys []chain.Secp256k1PrivateKey,
 ) error {
-	accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
-	if err != nil {
-		err = errors.Wrap(err, "❌ Fetching deployer account number and sequence failed")
-		return err
+	initialTxs := make([]payload.Tx, 0, len(fromPrivateKeys))
+
+	for keyIdx, fromPrivateKey := range fromPrivateKeys {
+		// fetching account number and sequence should be relatively fast, let's do one by one for each key
+		accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
+		if err != nil {
+			err = errors.Wrap(err, "❌ Fetching initial Tx account number and sequence failed")
+			return err
+		}
+
+		getAccountNumberSequencePace.Step(1)
+
+		// generating initial tx for each key
+		initialTx, err := provider.GenerateInitialTx(payload.TxRequest{
+			Keys: []chain.Secp256k1PrivateKey{
+				fromPrivateKey,
+			},
+
+			From: chain.Account{
+				Key:      fromPrivateKey,
+				Number:   accNum,
+				Sequence: accSeq,
+			},
+
+			FromIdx: keyIdx,
+			TxIdx:   0,
+		})
+		if err != nil {
+			err = errors.Wrap(err, "❌ Generating initial Tx failed")
+			return err
+		}
+
+		if initialTx != nil {
+			initialTxs = append(initialTxs, initialTx)
+		}
 	}
 
-	initialTx, err := provider.GenerateInitialTx(payload.TxRequest{
-		Keys: []chain.Secp256k1PrivateKey{
-			fromPrivateKey,
-		},
+	if len(initialTxs) == 0 {
+		logger.WithFields(log.Fields{
+			"num": len(initialTxs),
+		}).Infoln("✅ No initial txs to broadcast.")
 
-		From: chain.Account{
-			Name:     "deployer",
-			Key:      fromPrivateKey,
-			Number:   accNum,
-			Sequence: accSeq,
-		},
-
-		FromIdx: 0,
-	})
-	if err != nil {
-		err = errors.Wrap(err, "❌ Generating initial Tx failed")
-		return err
-	}
-
-	if initialTx == nil {
-		// skip init tx
 		return nil
+	} else {
+		logger.WithFields(log.Fields{
+			"num": len(initialTxs),
+		}).Debugln("✅ Generated initial txs to broadcast")
 	}
 
-	signedTx, err := provider.BuildAndSignTx(
-		client,
-		initialTx,
-	)
-	if err != nil {
-		err = errors.Wrap(err, "❌ Signing initial Tx failed")
-		return err
+	// we can broadcast initial txs in parallel because accounts are unique
+	pool := workerpool.New(maxParallelInitialTxsBroadcasts)
+
+	for _, initialTx := range initialTxs {
+		initialTx := initialTx
+
+		pool.Submit(func() {
+			if err := retry.Do(func() error {
+				defer catcher.Catch(
+					catcher.RecvLog(true),
+					catcher.RecvDie(1, true),
+				)
+
+				signedTx, err := provider.BuildAndSignTx(
+					client,
+					initialTx,
+				)
+				if err != nil {
+					err = errors.Wrap(err, "❌ Signing initial Tx failed")
+					return err
+				}
+
+				signedTxPace.Step(1)
+
+				txHash, err := client.Broadcast(ctx, signedTx.Bytes(), true)
+				if err != nil {
+					err = errors.Wrapf(err, "❌ Broadcasting initial Tx failed: %s", txHash)
+					return err
+				}
+
+				broadcastTxPace.Step(1)
+
+				logger.WithFields(log.Fields{
+					"txHash": txHash,
+				}).Debugln("✅ Initial Tx broadcasted")
+
+				return nil
+			},
+				retry.Context(ctx),
+				retry.Attempts(5),
+				retry.MaxDelay(5*time.Second),
+			); err != nil {
+				logger.WithError(err).Error("❌ All attempts to broadcast initial Tx failed")
+			}
+		})
 	}
 
-	txHash, err := client.Broadcast(ctx, signedTx.Bytes(), true)
-	if err != nil {
-		err = errors.Wrapf(err, "❌ Broadcasting initial Tx failed: %s", txHash)
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"txHash": txHash,
-	}).Infoln("✅ Initial Tx broadcasted")
+	defer pool.StopWait()
 
 	return nil
 }

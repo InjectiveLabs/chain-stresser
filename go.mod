@@ -13,8 +13,12 @@ require (
 	github.com/cosmos/cosmos-sdk v0.50.7
 	github.com/dottedmag/parallel v0.1.2
 	github.com/ethereum/go-ethereum v1.14.12
+	github.com/gammazero/workerpool v1.1.3
+	github.com/holiman/uint256 v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.8.1
+	github.com/stretchr/testify v1.9.0
+	github.com/xlab/catcher v1.3.1
 	github.com/xlab/closer v1.1.0
 	github.com/xlab/pace v1.1.0
 	github.com/xlab/suplog v1.4.4
@@ -104,6 +108,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/gammazero/deque v0.2.0 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-kit/kit v0.13.0 // indirect
@@ -143,7 +148,6 @@ require (
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/huandu/skiplist v1.2.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
@@ -198,7 +202,6 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.18.2 // indirect
 	github.com/status-im/keycard-go v0.2.0 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d // indirect

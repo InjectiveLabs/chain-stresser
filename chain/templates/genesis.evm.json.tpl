@@ -137,7 +137,7 @@
           "cancun_time": null,
           "prague_time": null
         },
-        "allow_unprotected_txs": false
+        "allow_unprotected_txs": true
       }
     },
     "exchange": {

@@ -243,7 +243,7 @@ http-idle-timeout = "2m0s"
 
 # AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
 # the node's RPC when the global parameter is disabled.
-allow-unprotected-txs = false
+allow-unprotected-txs = true
 
 # MaxOpenConnections sets the maximum number of simultaneous connections
 # for the server listener.

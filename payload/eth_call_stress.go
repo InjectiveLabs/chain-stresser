@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
 
-	contract "github.com/InjectiveLabs/chain-stresser/v2/contracts/solidity/Counter"
+	contract "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/Counter"
 )
 
 var _ TxProvider = &ethCallProvider{}
@@ -137,6 +137,10 @@ func (p *ethCallProvider) GenerateTx(
 func (p *ethCallProvider) GenerateInitialTx(
 	req TxRequest,
 ) (Tx, error) {
+	if req.FromIdx != 0 || req.TxIdx != 0 {
+		return nil, nil
+	}
+
 	tx := &ethCallTx{
 		baseTx: baseTx{
 			from: req.From,

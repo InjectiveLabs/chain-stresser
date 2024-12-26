@@ -22,7 +22,7 @@ func bytesOrPanic(out []byte, err error) []byte {
 	return out
 }
 
-func newPaceReporter(logger log.Logger) pace.ReporterFunc {
+func NewPaceReporter(logger log.Logger) pace.ReporterFunc {
 	var previous float64
 	var stalled time.Time
 

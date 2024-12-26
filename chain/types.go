@@ -2,6 +2,8 @@ package chain
 
 import (
 	"fmt"
+
+	ethcmn "github.com/ethereum/go-ethereum/common"
 )
 
 type Ports struct {
@@ -24,4 +26,8 @@ type Account struct {
 
 func (a Account) String() string {
 	return fmt.Sprintf("%s@%s", a.Name, a.Key.AccAddress())
+}
+
+func (a Account) EthAddress() ethcmn.Address {
+	return ethcmn.BytesToAddress(a.Key.PubKey().Address().Bytes())
 }

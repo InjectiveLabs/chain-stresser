@@ -7,13 +7,13 @@ install:
 	go install ./cmd/...
 
 solidity:
-	solc --combined-json abi,bin contracts/solidity/Counter.sol > contracts/solidity/Counter.json
-	abigen --combined-json contracts/solidity/Counter.json --pkg contract --type Counter --out contracts/solidity/Counter/Counter.go
-	rm contracts/solidity/Counter.json
+	solc --combined-json abi,bin eth/solidity/Counter.sol > eth/solidity/Counter.json
+	abigen --combined-json eth/solidity/Counter.json --pkg contract --type Counter --out eth/solidity/Counter/Counter.go
+	rm eth/solidity/Counter.json
 
-	solc --combined-json abi,bin contracts/solidity/BenchmarkInternalCall.sol > contracts/solidity/BenchmarkInternalCall.json
-	abigen --combined-json contracts/solidity/BenchmarkInternalCall.json --pkg contract --type BenchmarkInternalCall --out contracts/solidity/BenchmarkInternalCall/BenchmarkInternalCall.go
-	rm contracts/solidity/BenchmarkInternalCall.json
+	solc --combined-json abi,bin eth/solidity/BenchmarkInternalCall.sol > eth/solidity/BenchmarkInternalCall.json
+	abigen --combined-json eth/solidity/BenchmarkInternalCall.json --pkg contract --type BenchmarkInternalCall --out eth/solidity/BenchmarkInternalCall/BenchmarkInternalCall.go
+	rm eth/solidity/BenchmarkInternalCall.json
 
 gen-0:
 	chain-stresser generate --accounts-num 1000 --validators 1 --sentries 0 --instances 1 --evm true
@@ -39,11 +39,17 @@ run-eth-deploy:
 run-eth-internal-call:
 	chain-stresser tx-eth-internal-call --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000 --iterations 10000
 
+run-eth-userop:
+	chain-stresser tx-eth-userop --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 10
+
 args = $(foreach a,$($(subst _,-,$1)_args),$(if $(value $a),"$($a)"))
 eth-counter-get_args = contract
 
 eth-counter-get:
-	etherman -N Counter -S ./contracts/solidity/Counter.sol call $(call args,$@) getCount
+	etherman -N Counter -S ./eth/solidity/Counter.sol call $(call args,$@) getCount
+
+eth-counter-deploy:
+	etherman -N Counter -S ./eth/solidity/Counter.sol -P 58aeee3e3848e52689b9edca5fccba193c755b02686e6fc34fd13596e5521ebb deploy 0x00
 
 cook:
 	rsync -r ../chain-stresser cooking:~/go/src/

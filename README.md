@@ -56,7 +56,7 @@ chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accou
 
 ## Querying EVM State
 
-Use one of the benchmarks that deploy a contract and update its state. For example, `tx-eth-call` uses a [Counter.sol](./contracts/solidity/Counter.sol) contract. You can access its state after benchmark ends using [etherman](https://github.com/InjectiveLabs/etherman) tool.
+Use one of the benchmarks that deploy a contract and update its state. For example, `tx-eth-call` uses a [Counter.sol](./eth/solidity/Counter.sol) contract. You can access its state after benchmark ends using [etherman](https://github.com/InjectiveLabs/etherman) tool.
 
 ```
 make eth-counter-get contract=0x000...
@@ -65,7 +65,7 @@ make eth-counter-get contract=0x000...
 Or use a full CLI command:
 
 ```
-etherman -N Counter -S ./contracts/solidity/Counter.sol call 0x000... getCount
+etherman -N Counter -S ./eth/solidity/Counter.sol call 0x000... getCount
 ```
 
 See `etherman --help` for more info.

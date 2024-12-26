@@ -10,7 +10,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 
-	contract "github.com/InjectiveLabs/chain-stresser/v2/contracts/solidity/Counter"
+	contract "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/Counter"
 )
 
 var _ TxProvider = &ethDeployProvider{}
@@ -83,23 +83,25 @@ func (p *ethDeployProvider) Name() string {
 func (p *ethDeployProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
-	tx := &ethDeployTx{
-		baseTx: baseTx{
-			from: req.From,
-			msgs: []sdk.Msg{
-				evmtypes.NewTxWithData(&ethtypes.LegacyTx{
-					Nonce:    req.From.Sequence,
-					To:       nil, // deployment
-					Value:    noValue,
-					Gas:      p.maxGasLimit,
-					GasPrice: p.minGasPrice.Amount.BigInt(),
-					Data:     ethcmn.FromHex(p.contractMetaData.Bin),
-				}),
-			},
+	if req.FromIdx != 0 || req.TxIdx != 0 {
+		return nil, nil
+	}
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+	tx := &baseTx{
+		from: req.From,
+		msgs: []sdk.Msg{
+			evmtypes.NewTxWithData(&ethtypes.LegacyTx{
+				Nonce:    req.From.Sequence,
+				To:       nil, // deployment
+				Value:    noValue,
+				Gas:      p.maxGasLimit,
+				GasPrice: p.minGasPrice.Amount.BigInt(),
+				Data:     ethcmn.FromHex(p.contractMetaData.Bin),
+			}),
 		},
+
+		fromIdx: req.FromIdx,
+		txIdx:   req.TxIdx,
 	}
 
 	return tx, nil

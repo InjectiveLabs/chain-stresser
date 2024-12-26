@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"time"
 
+	ethcmn "github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/xlab/closer"
+	"github.com/xlab/pace"
 	log "github.com/xlab/suplog"
 
 	stresser "github.com/InjectiveLabs/chain-stresser/v2"
@@ -233,6 +236,56 @@ func main() {
 	}
 	txEthInternalCallCmd.Flags().Uint64Var(&ethInternalCallIterations, "iterations", 10, "Number of internal call iterations to run for each external tx")
 	rootCmd.AddCommand(txEthInternalCallCmd)
+
+	var (
+		ethRPCURL             string
+		entrypointAddress     string
+		beneficiaryAddress    string
+		accountFactoryAddress string
+		counterContractAddr   string
+	)
+
+	txEthUserOpCmd := &cobra.Command{
+		Use:   "tx-eth-userop",
+		Short: "Run stresstest with eth contract UserOp transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			userOpsSignedPace := pace.New("userops signed", 1*time.Minute, stresser.NewPaceReporter(log.DefaultLogger))
+
+			ethUserOpProvider, err := payload.NewEthUserOpProvider(
+				ethRPCURL,
+				stressCfg.ChainID,
+				stressCfg.MinGasPrice,
+				userOpsSignedPace,
+				ethcmn.HexToAddress(entrypointAddress),
+				ethcmn.HexToAddress(beneficiaryAddress),
+				ethcmn.HexToAddress(accountFactoryAddress),
+				ethcmn.HexToAddress(counterContractAddr),
+			)
+			if err != nil {
+				return errors.Wrap(err, "failed to initiate eth UserOp stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, ethUserOpProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+
+	txEthUserOpCmd.Flags().StringVar(&ethRPCURL, "eth-rpc-url", "http://localhost:8545", "Ethereum RPC URL")
+	txEthUserOpCmd.Flags().StringVar(&entrypointAddress, "entrypoint-address", "0x586AaA4d77955b36784cADf6D9D617b952d45DA1", "EntryPoint contract address")
+	txEthUserOpCmd.Flags().StringVar(&beneficiaryAddress, "beneficiary-address", "0x0000000000000000000000000000000000000000", "Beneficiary address for UserOp fees")
+	txEthUserOpCmd.Flags().StringVar(&accountFactoryAddress, "factory-address", "0x0B3809304F2bAad3E0d0810B98Cc7e505C06ce89", "Account Factory contract address")
+	txEthUserOpCmd.Flags().StringVar(&counterContractAddr, "counter-address", "0x590d9D4654FC262BFE72d115355db2aEb7DB902f", "Counter contract address")
+	rootCmd.AddCommand(txEthUserOpCmd)
 
 	orPanic(rootCmd.Execute())
 }

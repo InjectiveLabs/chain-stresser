@@ -14,15 +14,13 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
 
-	contract "github.com/InjectiveLabs/chain-stresser/v2/contracts/solidity/BenchmarkInternalCall"
+	contract "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/BenchmarkInternalCall"
 )
 
 var _ TxProvider = &ethInternalCallProvider{}
 
 type ethInternalCallProvider struct {
 	ethTxBuilderAndSigner
-
-	logger log.Logger
 
 	minGasPrice           sdk.Coin
 	maxGasLimit           uint64
@@ -32,6 +30,8 @@ type ethInternalCallProvider struct {
 	contractMetaData *bind.MetaData
 	contractABI      *abi.ABI
 	contractAddress  ethcmn.Address
+
+	logger log.Logger
 }
 
 const defaultEthInternalCallIterations = 100
@@ -144,23 +144,25 @@ func (p *ethInternalCallProvider) GenerateTx(
 func (p *ethInternalCallProvider) GenerateInitialTx(
 	req TxRequest,
 ) (Tx, error) {
-	tx := &ethInternalCallTx{
-		baseTx: baseTx{
-			from: req.From,
-			msgs: []sdk.Msg{
-				evmtypes.NewTxWithData(&ethtypes.LegacyTx{
-					Nonce:    req.From.Sequence,
-					To:       nil, // contract deployment
-					Value:    noValue,
-					Gas:      p.maxGasLimitDeployment,
-					GasPrice: p.minGasPrice.Amount.BigInt(),
-					Data:     ethcmn.FromHex(p.contractMetaData.Bin),
-				}),
-			},
+	if req.FromIdx != 0 || req.TxIdx != 0 {
+		return nil, nil
+	}
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+	tx := &baseTx{
+		from: req.From,
+		msgs: []sdk.Msg{
+			evmtypes.NewTxWithData(&ethtypes.LegacyTx{
+				Nonce:    req.From.Sequence,
+				To:       nil, // contract deployment
+				Value:    noValue,
+				Gas:      p.maxGasLimitDeployment,
+				GasPrice: p.minGasPrice.Amount.BigInt(),
+				Data:     ethcmn.FromHex(p.contractMetaData.Bin),
+			}),
 		},
+
+		fromIdx: req.FromIdx,
+		txIdx:   req.TxIdx,
 	}
 
 	ethFrom := ethcmn.BytesToAddress(req.From.Key.PubKey().Address().Bytes())
