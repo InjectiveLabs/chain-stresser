@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
 
-	contract_entrypoint "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/IEntrypoint"
+	contract_entrypoint "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/IEntryPoint"
 	contract_light_account "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/LightAccount"
 	contract_light_account_factory "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/LightAccountFactory"
 )

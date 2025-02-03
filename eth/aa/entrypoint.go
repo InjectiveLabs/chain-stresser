@@ -12,7 +12,7 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
-	contract_entrypoint "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/IEntrypoint"
+	contract_entrypoint "github.com/InjectiveLabs/chain-stresser/v2/eth/solidity/IEntryPoint"
 )
 
 type Entrypoint interface {
