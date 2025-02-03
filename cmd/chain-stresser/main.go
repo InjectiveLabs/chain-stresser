@@ -131,6 +131,37 @@ func main() {
 	}
 	rootCmd.AddCommand(txBankSendCmd)
 
+	var (
+		multiSendNumTargets int
+	)
+
+	txBankMultiSendCmd := &cobra.Command{
+		Use:   "tx-bank-send-many",
+		Short: "Run stresstest with x/bank.MsgMultiSend transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			sendAmount := "1" + chain.DefaultBondDenom
+			bankMultiSendProvider, err := payload.NewBankMultiSendProvider(stressCfg.MinGasPrice, sendAmount, multiSendNumTargets)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate bank multi send stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, bankMultiSendProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	txBankMultiSendCmd.Flags().IntVar(&multiSendNumTargets, "targets", 50, "Number of targets to send the funds to.")
+	rootCmd.AddCommand(txBankMultiSendCmd)
+
 	txEthSendCmd := &cobra.Command{
 		Use:   "tx-eth-send",
 		Short: "Run stresstest with eth value send transactions.",

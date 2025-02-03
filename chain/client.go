@@ -62,6 +62,7 @@ type Tx struct {
 	Msgs     []sdk.Msg
 	Fee      sdk.Coins
 	GasLimit uint64
+	Memo     string
 }
 
 func (c Client) BuildAndSignTx(
@@ -75,6 +76,7 @@ func (c Client) BuildAndSignTx(
 		signerAccount.Sequence,
 		tx.Fee,
 		tx.GasLimit,
+		tx.Memo,
 		tx.Msgs...,
 	)
 }
@@ -246,11 +248,16 @@ func buildAndSignTx(
 	accNum, accSeq uint64,
 	fee sdk.Coins,
 	gasLimit uint64,
+	memo string,
 	msgs ...sdk.Msg,
 ) (signedTx authsigning.Tx, err error) {
 	txBuilder := clientCtx.TxConfig.NewTxBuilder()
 	txBuilder.SetGasLimit(gasLimit)
 	txBuilder.SetFeeAmount(fee)
+	if memo != "" {
+		txBuilder.SetMemo(memo)
+	}
+
 	if err = txBuilder.SetMsgs(msgs...); err != nil {
 		err = errors.Wrap(err, "failed to set Tx messages")
 		return nil, err

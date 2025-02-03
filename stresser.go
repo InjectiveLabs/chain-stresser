@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
@@ -129,49 +130,72 @@ func Stress(
 				))
 			}
 
+			initialAccountSequencesMux := new(sync.Mutex)
 			initialAccountSequences = make([]uint64, numOfAccounts)
+			workpool := workerpool.New(runtime.NumCPU())
 
 			for fromIdx := 0; fromIdx < numOfAccounts; fromIdx++ {
 				fromPrivateKey := config.Accounts[fromIdx]
+				accAddress := fromPrivateKey.AccAddress()
 
-				accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
-				if err != nil {
-					err = errors.Wrap(err, "❌ Fetching account number and sequence failed")
-					return err
-				}
+				workpool.Submit(func() {
+					defer catcher.Catch(
+						catcher.RecvLog(true),
+						catcher.RecvDie(1, true),
+					)
 
-				getAccountNumberSequencePace.Step(1)
-				initialAccountSequences[fromIdx] = accSeq
+					accNum, accSeq, err := getAccountNumberSequence(ctx, client, accAddress)
+					if err != nil {
+						err = errors.Wrap(err, "❌ Fetching account number and sequence failed")
+						logger.WithFields(log.Fields{
+							"accIdx":  fromIdx,
+							"address": accAddress,
+						}).WithError(err).Fatalln("❌ Fetching account number and sequence failed")
 
-				txRequest := payload.TxRequest{
-					Keys: config.Accounts,
-
-					From: chain.Account{
-						Name:     fmt.Sprintf("sender-%d", fromIdx),
-						Key:      fromPrivateKey,
-						Number:   accNum,
-						Sequence: accSeq,
-					},
-
-					FromIdx: fromIdx,
-				}
-
-				for txIdx := 0; txIdx < config.NumOfTransactions; txIdx++ {
-					txRequest.TxIdx = txIdx
-
-					tx, err := txProvider.GenerateTx(txRequest)
-					orPanic(err)
-
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case txQueue <- tx:
+						return
 					}
 
-					txRequest.From.Sequence++
-				}
+					initialAccountSequencesMux.Lock()
+					initialAccountSequences[fromIdx] = accSeq
+					initialAccountSequencesMux.Unlock()
+					getAccountNumberSequencePace.Step(1)
+
+					txRequest := payload.TxRequest{
+						Keys: config.Accounts,
+
+						From: chain.Account{
+							Name:     fmt.Sprintf("sender-%d", fromIdx),
+							Key:      fromPrivateKey,
+							Number:   accNum,
+							Sequence: accSeq,
+						},
+
+						FromIdx: fromIdx,
+					}
+
+					for txIdx := 0; txIdx < config.NumOfTransactions; txIdx++ {
+						txRequest.TxIdx = txIdx
+
+						tx, err := txProvider.GenerateTx(txRequest)
+						orPanic(err)
+
+						select {
+						case <-ctx.Done():
+							logger.WithFields(log.Fields{
+								"fromIdx": fromIdx,
+								"txIdx":   txIdx,
+							}).Fatalln("❌ Context ended prematurely")
+
+							return
+						case txQueue <- tx:
+						}
+
+						txRequest.From.Sequence++
+					}
+				})
 			}
 
+			workpool.StopWait()
 			return nil
 		})
 

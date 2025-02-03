@@ -1,6 +1,7 @@
 package payload
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 
 	"cosmossdk.io/math"
@@ -11,21 +12,27 @@ import (
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 )
 
-var _ TxProvider = &bankSendProvider{}
+var _ TxProvider = &bankMultiSendProvider{}
 
-type bankSendProvider struct {
+type bankMultiSendProvider struct {
 	sendAmount  sdk.Coin
 	minGasPrice sdk.Coin
 	maxGasLimit uint64
 	memoAttach  string
+	numTargets  int
 }
 
-// NewBankSendProvider creates transaction factory for stress testing
-// native x/bank coin transfers between accounts.
-func NewBankSendProvider(
+// NewBankMultiSendProvider creates transaction factory for stress testing
+// native x/bank coin transfers to multiple accounts. Allows to inflate arity.
+func NewBankMultiSendProvider(
 	minGasPrice string,
 	sendAmount string,
+	numTargets int,
 ) (TxProvider, error) {
+	if numTargets < 1 {
+		return nil, errors.New("numTargets must be greater than 0")
+	}
+
 	parsedAmount, err := sdk.ParseCoinNormalized(sendAmount)
 	if err != nil {
 		err = errors.Wrap(err, "failed to parse amount coin")
@@ -38,65 +45,83 @@ func NewBankSendProvider(
 		return nil, err
 	}
 
-	var randmemo []byte
-	// randmemo := make([]byte, 128)
-	// _, err = rand.Read(randmemo)
-	// if err != nil {
-	// 	err = errors.Wrap(err, "failed to generate random memo")
-	// 	return nil, err
-	// }
+	randmemo := make([]byte, 128)
+	_, err = rand.Read(randmemo)
+	if err != nil {
+		err = errors.Wrap(err, "failed to generate random memo")
+		return nil, err
+	}
 
-	provider := &bankSendProvider{
+	provider := &bankMultiSendProvider{
 		sendAmount:  parsedAmount,
 		minGasPrice: parsedMinGasPrice,
-		maxGasLimit: 150000,
+		maxGasLimit: 1350000, //30000 * uint64(numTargets), // 1350000
 		memoAttach:  hex.EncodeToString(randmemo),
+		numTargets:  numTargets,
 	}
 
 	return provider, nil
 }
 
-type bankSendTx struct {
+type bankMultiSendTx struct {
 	baseTx
 
 	to sdk.AccAddress
 }
 
-func (p *bankSendProvider) Name() string {
-	return "bank_send_stress"
+func (p *bankMultiSendProvider) Name() string {
+	return "bank_multi_send_stress"
 }
 
-func (p *bankSendProvider) GenerateTx(
+func (p *bankMultiSendProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
-	toIdx := req.FromIdx + 1
-	if toIdx >= len(req.Keys) {
-		toIdx = 0
+	totalAmount := p.sendAmount.Amount.Mul(math.NewInt(int64(p.numTargets)))
+	input := banktypes.NewInput(
+		req.From.Key.Address(),
+		sdk.Coins{
+			sdk.NewCoin(
+				p.sendAmount.Denom,
+				totalAmount,
+			),
+		},
+	)
+
+	outputs := make([]banktypes.Output, 0, p.numTargets)
+
+	for offset := 1; offset <= p.numTargets; offset++ {
+		toIdx := req.FromIdx + offset
+		if toIdx >= len(req.Keys) {
+			toIdx = 0
+		}
+
+		outputs = append(outputs, banktypes.NewOutput(
+			req.Keys[toIdx].Address(),
+			sdk.Coins{
+				p.sendAmount,
+			},
+		))
 	}
 
-	sendCoins := sdk.Coins{
-		p.sendAmount,
-	}
-
-	to := req.Keys[toIdx].Address()
-	tx := &bankSendTx{
+	tx := &bankMultiSendTx{
 		baseTx: baseTx{
 			from: req.From,
 			msgs: []sdk.Msg{
-				banktypes.NewMsgSend(req.From.Key.Address(), to, sendCoins),
+				banktypes.NewMsgMultiSend(input, outputs),
 			},
 
 			fromIdx: req.FromIdx,
 			txIdx:   req.TxIdx,
 		},
 
-		to: to,
+		// doesn't matter for this tx
+		to: sdk.AccAddress{},
 	}
 
 	return tx, nil
 }
 
-func (p *bankSendProvider) BuildAndSignTx(
+func (p *bankMultiSendProvider) BuildAndSignTx(
 	client chain.Client,
 	unsignedTx Tx,
 ) (signedTx Tx, err error) {
@@ -122,7 +147,7 @@ func (p *bankSendProvider) BuildAndSignTx(
 	return tx, nil
 }
 
-func (p *bankSendProvider) GenerateInitialTx(
+func (p *bankMultiSendProvider) GenerateInitialTx(
 	req TxRequest,
 ) (Tx, error) {
 	return nil, nil

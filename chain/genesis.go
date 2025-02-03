@@ -202,7 +202,7 @@ func (g *Genesis) AddValidator(
 	)
 	orPanic(err)
 
-	signedTx, err := buildAndSignTx(g.clientCtx, stakerPrivateKey, 0, 0, sdk.Coins{}, 200000, msg)
+	signedTx, err := buildAndSignTx(g.clientCtx, stakerPrivateKey, 0, 0, sdk.Coins{}, 200000, "", msg)
 	orPanic(err)
 
 	encodedTx := bytesOrPanic(g.clientCtx.TxConfig.TxJSONEncoder()(signedTx))
