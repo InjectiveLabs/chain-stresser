@@ -397,11 +397,3 @@ func (la *lightAccount) newUserOperation(
 
 	return userOperation, nil
 }
-
-type UserOperationGasEstimates struct {
-	CallGasLimit         int64
-	VerificationGasLimit int64
-	PreVerificationGas   int64
-	MaxFeePerGas         int64
-	MaxPriorityFeePerGas int64
-}

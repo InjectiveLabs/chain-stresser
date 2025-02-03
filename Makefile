@@ -7,11 +7,11 @@ install:
 	go install ./cmd/...
 
 solidity:
-	solc --combined-json abi,bin eth/solidity/Counter.sol > eth/solidity/Counter.json
+	solc --optimize --optimize-runs 2000000 --combined-json abi,bin eth/solidity/Counter.sol > eth/solidity/Counter.json
 	abigen --combined-json eth/solidity/Counter.json --pkg contract --type Counter --out eth/solidity/Counter/Counter.go
 	rm eth/solidity/Counter.json
 
-	solc --combined-json abi,bin eth/solidity/BenchmarkInternalCall.sol > eth/solidity/BenchmarkInternalCall.json
+	solc --optimize --optimize-runs 2000000 --combined-json abi,bin eth/solidity/BenchmarkInternalCall.sol > eth/solidity/BenchmarkInternalCall.json
 	abigen --combined-json eth/solidity/BenchmarkInternalCall.json --pkg contract --type BenchmarkInternalCall --out eth/solidity/BenchmarkInternalCall/BenchmarkInternalCall.go
 	rm eth/solidity/BenchmarkInternalCall.json
 

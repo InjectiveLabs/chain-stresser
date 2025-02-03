@@ -358,3 +358,11 @@ func (op *PackedUserOperation) ToMap() (map[string]any, error) {
 	}
 	return opData, nil
 }
+
+type UserOperationGasEstimates struct {
+	CallGasLimit         int64
+	VerificationGasLimit int64
+	PreVerificationGas   int64
+	MaxFeePerGas         int64
+	MaxPriorityFeePerGas int64
+}

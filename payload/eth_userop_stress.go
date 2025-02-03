@@ -87,7 +87,7 @@ func NewEthUserOpProvider(
 		},
 
 		minGasPrice:          parsedMinGasPrice,
-		maxGasLimitPerUserOp: 45000,
+		maxGasLimitPerUserOp: 42000,
 		maxGasLimitInitialTx: 230000,
 
 		ethRPCURL:             ethRPCURL,
@@ -181,7 +181,7 @@ func (p *ethUserOpProvider) GenerateTx(
 	}
 
 	// TODO: make this configurable
-	opsPerTx := 500
+	opsPerTx := 50
 
 	userOps := make([]aa.PackedUserOperation, opsPerTx)
 	for i := 0; i < opsPerTx; i++ {

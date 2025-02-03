@@ -13,7 +13,7 @@ contract Counter {
 
     function increase() public {
         _count += 1;
-        emit Increased(msg.sender, _count);
+        // emit Increased(msg.sender, _count);
     }
 
     function decrease() public {
