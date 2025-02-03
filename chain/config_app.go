@@ -11,6 +11,7 @@ import (
 type AppConfig struct {
 	MinimumGasPrices string
 	EVMEnabled       bool
+	ProdLike         bool
 }
 
 func (appConfig *AppConfig) Save(homeDir string) {
@@ -24,6 +25,9 @@ func (appConfig *AppConfig) Save(homeDir string) {
 
 	if appConfig.EVMEnabled {
 		tpl := template.Must(template.New("app_evm").Parse(string(appEvmTplTOML)))
+		orPanic(tpl.Execute(buf, appConfig))
+	} else if appConfig.ProdLike {
+		tpl := template.Must(template.New("app_prod").Parse(string(appProdTplTOML)))
 		orPanic(tpl.Execute(buf, appConfig))
 	} else {
 		tpl := template.Must(template.New("app").Parse(string(appTplTOML)))
@@ -39,4 +43,7 @@ var (
 
 	//go:embed templates/app.evm.toml.tpl
 	appEvmTplTOML []byte
+
+	//go:embed templates/app.prod.toml.tpl
+	appProdTplTOML []byte
 )

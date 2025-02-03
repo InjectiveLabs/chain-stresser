@@ -19,6 +19,7 @@ type GeneratorEnvironment struct {
 	NumOfInstances           int
 	NumOfAccountsPerInstance int
 	OutDirectory             string
+	ProdLike                 bool
 }
 
 const (
@@ -56,6 +57,7 @@ func GenerateConfigs(
 	genesis := chain.NewGenesis(&chain.GenesisConfig{
 		ChainID:    env.ChainID,
 		EvmEnabled: env.EvmEnabled,
+		ProdLike:   env.ProdLike,
 	})
 
 	nodeIDs := make([]string, 0, env.NumOfValidators)
@@ -68,18 +70,27 @@ func GenerateConfigs(
 
 		valDir := fmt.Sprintf("%s/validators/%d", dir, i)
 
+		txIndexerKind := chain.TxIndexerKV
+		if env.ProdLike {
+			txIndexerKind = chain.TxIndexerDisabled
+		}
+
 		nodeConfig := &chain.NodeConfig{
-			Name:           fmt.Sprintf("validator-%d", i),
-			IP:             net.IPv4zero,
-			PrometheusPort: chain.DefaultPorts.Prometheus,
-			NodeKey:        nodePrivateKey,
-			ValidatorKey:   validatorPrivateKey,
+			Moniker:              fmt.Sprintf("validator-%d", i),
+			IP:                   net.IPv4zero,
+			PrometheusPort:       chain.DefaultPorts.Prometheus,
+			NodeKey:              nodePrivateKey,
+			ValidatorKey:         validatorPrivateKey,
+			ProdLike:             env.ProdLike,
+			TxIndexer:            txIndexerKind,
+			DiscardABCIResponses: env.ProdLike, // discard in prod
 		}
 		nodeConfig.Save(valDir)
 
 		appConfig := &chain.AppConfig{
 			MinimumGasPrices: minimumGasPrices,
 			EVMEnabled:       env.EvmEnabled,
+			ProdLike:         env.ProdLike,
 		}
 		appConfig.Save(valDir)
 
@@ -114,15 +125,19 @@ func GenerateConfigs(
 			nodePrivateKey := tmed25519.GenPrivKey()
 
 			nodeConfig := &chain.NodeConfig{
-				Name:           fmt.Sprintf("sentry-node-%d", i),
-				IP:             net.IPv4zero,
-				PrometheusPort: chain.DefaultPorts.Prometheus,
-				NodeKey:        nodePrivateKey,
+				Moniker:              fmt.Sprintf("sentry-node-%d", i),
+				IP:                   net.IPv4zero,
+				PrometheusPort:       chain.DefaultPorts.Prometheus,
+				NodeKey:              nodePrivateKey,
+				ProdLike:             env.ProdLike,
+				TxIndexer:            chain.TxIndexerKV,
+				DiscardABCIResponses: false,
 			}
 
 			appConfig := &chain.AppConfig{
 				MinimumGasPrices: minimumGasPrices,
 				EVMEnabled:       env.EvmEnabled,
+				ProdLike:         env.ProdLike,
 			}
 
 			nodeDir := fmt.Sprintf("%s/sentry-nodes/%d", dir, i)

@@ -43,6 +43,7 @@ type GenesisConfig struct {
 	ChainID     string
 	BondDenom   string
 	EvmEnabled  bool
+	ProdLike    bool
 }
 
 func NewGenesis(genConfig *GenesisConfig) *Genesis {
@@ -70,6 +71,9 @@ func NewGenesis(genConfig *GenesisConfig) *Genesis {
 
 	if genConfig.EvmEnabled {
 		tpl := template.Must(template.New("genesis_evm").Parse(string(genesisEvmTplJSON)))
+		orPanic(tpl.Execute(buf, genConfig))
+	} else if genConfig.ProdLike {
+		tpl := template.Must(template.New("genesis_prod").Parse(string(genesisProdTplJSON)))
 		orPanic(tpl.Execute(buf, genConfig))
 	} else {
 		tpl := template.Must(template.New("genesis").Parse(string(genesisTplJSON)))
@@ -242,4 +246,7 @@ var (
 
 	//go:embed templates/genesis.evm.json.tpl
 	genesisEvmTplJSON []byte
+
+	//go:embed templates/genesis.prod.json.tpl
+	genesisProdTplJSON []byte
 )
