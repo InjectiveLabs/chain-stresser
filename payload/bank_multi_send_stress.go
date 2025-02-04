@@ -55,7 +55,7 @@ func NewBankMultiSendProvider(
 	provider := &bankMultiSendProvider{
 		sendAmount:  parsedAmount,
 		minGasPrice: parsedMinGasPrice,
-		maxGasLimit: 1350000, //30000 * uint64(numTargets), // 1350000
+		maxGasLimit: 18000000, // 30000 * uint64(numTargets),
 		memoAttach:  hex.EncodeToString(randmemo),
 		numTargets:  numTargets,
 	}

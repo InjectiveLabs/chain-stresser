@@ -66,8 +66,8 @@ func Stress(
 	var initialAccountSequences []uint64
 
 	err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
-		txQueue := make(chan payload.Tx)
-		txSignedQueue := make(chan payload.Tx)
+		txQueue := make(chan payload.Tx, 1000000)
+		txSignedQueue := make(chan payload.Tx, 1000000)
 
 		for n := 0; n < runtime.NumCPU(); n++ {
 			spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
@@ -132,13 +132,13 @@ func Stress(
 
 			initialAccountSequencesMux := new(sync.Mutex)
 			initialAccountSequences = make([]uint64, numOfAccounts)
-			workpool := workerpool.New(runtime.NumCPU())
+			pool := workerpool.New(runtime.NumCPU())
 
 			for fromIdx := 0; fromIdx < numOfAccounts; fromIdx++ {
 				fromPrivateKey := config.Accounts[fromIdx]
 				accAddress := fromPrivateKey.AccAddress()
 
-				workpool.Submit(func() {
+				pool.Submit(func() {
 					defer catcher.Catch(
 						catcher.RecvLog(true),
 						catcher.RecvDie(1, true),
@@ -195,7 +195,7 @@ func Stress(
 				})
 			}
 
-			workpool.StopWait()
+			pool.StopWait()
 			return nil
 		})
 
