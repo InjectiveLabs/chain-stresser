@@ -394,9 +394,6 @@
       "stork_publishers": []
     },
     "packetfowardmiddleware": {
-      "params": {
-        "fee_percentage": "0.000000000000000000"
-      },
       "in_flight_packets": {}
     },
     "params": null,
