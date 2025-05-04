@@ -20,6 +20,7 @@ import (
 
 const (
 	defaultChainID       = "stressinj-1337"
+	defaultEthChainID    = 1337
 	defaultMinGasPrice   = "1inj"
 	defaultNumOfAccounts = 1000
 	defaultNumOfTx       = 100
@@ -96,6 +97,7 @@ func main() {
 	}
 
 	generateCmd.Flags().StringVar(&genEnv.ChainID, "chain-id", defaultChainID, "ID of the chain to generate.")
+	generateCmd.Flags().IntVar(&genEnv.EthChainID, "eth-chain-id", defaultEthChainID, "EIP-155 ChainID of the EVM (can be different from the Cosmos chain-id).")
 	generateCmd.Flags().BoolVar(&genEnv.EvmEnabled, "evm", false, "Enabled EVM support. Generates genesis with EVM state.")
 	generateCmd.Flags().BoolVar(&genEnv.ProdLike, "prod", false, "Generate config for prod-like chain (app/bft configs will be close to mainnet versions).")
 	generateCmd.Flags().IntVar(&genEnv.NumOfValidators, "validators", defaultNumOfValidators, "Number of validators to generate config for.")

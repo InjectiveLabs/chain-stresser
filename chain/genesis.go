@@ -35,12 +35,16 @@ const (
 	// DefaultChainID is the default chain ID used in the genesis file
 	// Note that the chain ID must end with a number, to allow EVM chain IDs to be used
 	DefaultChainID = "stressinj-1337"
+
+	// DefaultEthChainID is the default EVM chain ID used in the genesis file
+	DefaultEthChainID = 1337
 )
 
 type GenesisConfig struct {
 	AppVersion  string
 	GenesisTime string
 	ChainID     string
+	EthChainID  int
 	BondDenom   string
 	EvmEnabled  bool
 	ProdLike    bool
@@ -61,6 +65,10 @@ func NewGenesis(genConfig *GenesisConfig) *Genesis {
 
 	if len(genConfig.ChainID) == 0 {
 		genConfig.ChainID = DefaultChainID
+	}
+
+	if genConfig.EthChainID == 0 {
+		genConfig.EthChainID = DefaultEthChainID
 	}
 
 	if len(genConfig.GenesisTime) == 0 {

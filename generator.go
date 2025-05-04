@@ -13,6 +13,7 @@ import (
 
 type GeneratorEnvironment struct {
 	ChainID                  string
+	EthChainID               int
 	EvmEnabled               bool
 	NumOfValidators          int
 	NumOfSentryNodes         int
@@ -56,6 +57,7 @@ func GenerateConfigs(
 
 	genesis := chain.NewGenesis(&chain.GenesisConfig{
 		ChainID:    env.ChainID,
+		EthChainID: env.EthChainID,
 		EvmEnabled: env.EvmEnabled,
 		ProdLike:   env.ProdLike,
 	})

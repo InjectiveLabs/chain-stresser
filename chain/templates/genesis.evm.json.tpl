@@ -116,6 +116,7 @@
         "enable_call": true,
         "extra_eips": [],
         "chain_config": {
+          "eip155_chain_id": "{{.EthChainID}}",
           "homestead_block": "0",
           "dao_fork_block": "0",
           "dao_fork_support": true,
