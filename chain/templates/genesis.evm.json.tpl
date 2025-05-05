@@ -135,8 +135,8 @@
           "gray_glacier_block": "0",
           "merge_netsplit_block": "0",
           "shanghai_time": "0",
-          "cancun_time": null,
-          "prague_time": null
+          "cancun_time": "0",
+          "prague_time": "0"
         },
         "allow_unprotected_txs": true
       }
