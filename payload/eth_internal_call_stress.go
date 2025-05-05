@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
-	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -39,7 +38,7 @@ const defaultEthInternalCallIterations = 100
 // NewEthInternalCallProvider creates transaction factory for stress testing
 // Solidity contract calling internal contract.
 func NewEthInternalCallProvider(
-	chainID string,
+	ethChainID *big.Int,
 	minGasPrice string,
 	iterations uint64,
 ) (TxProvider, error) {
@@ -58,13 +57,7 @@ func NewEthInternalCallProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := chaintypes.ParseChainID(chainID)
-	if err != nil {
-		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
-		return nil, err
-	}
-
-	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
+	ethSigner := ethtypes.LatestSignerForChainID(ethChainID)
 
 	provider := &ethInternalCallProvider{
 		ethTxBuilderAndSigner: ethTxBuilderAndSigner{

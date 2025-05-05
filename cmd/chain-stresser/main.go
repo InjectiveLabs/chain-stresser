@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 	"os"
 	"time"
 
@@ -42,7 +43,7 @@ func init() {
 func main() {
 	var (
 		stressCfg = stresser.StressConfig{
-			ChainID:           defaultChainID,
+			EthChainID:        defaultEthChainID,
 			MinGasPrice:       defaultMinGasPrice,
 			NumOfTransactions: defaultNumOfTx,
 		}
@@ -69,7 +70,7 @@ func main() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&stressCfg.ChainID, "chain-id", defaultChainID, "Expected ID of the chain.")
+	rootCmd.PersistentFlags().Int64Var(&stressCfg.EthChainID, "chain-id", defaultEthChainID, "Expected EIP-155 chain ID of the EVM.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.MinGasPrice, "min-gas-price", defaultMinGasPrice, "Minimum gas price to pay for each transaction.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "localhost:26657", "Address of a injectived node RPC to connect to.")
 	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", true, "Await for transaction to be included in a block.")
@@ -96,8 +97,8 @@ func main() {
 		},
 	}
 
-	generateCmd.Flags().StringVar(&genEnv.ChainID, "chain-id", defaultChainID, "ID of the chain to generate.")
-	generateCmd.Flags().IntVar(&genEnv.EthChainID, "eth-chain-id", defaultEthChainID, "EIP-155 ChainID of the EVM (can be different from the Cosmos chain-id).")
+	generateCmd.Flags().StringVar(&genEnv.ChainID, "chain-id", defaultChainID, "Cosmos chain ID of the chain to generate.")
+	generateCmd.Flags().IntVar(&genEnv.EthChainID, "eth-chain-id", defaultEthChainID, "EIP-155 chain ID of the EVM (can be different from the Cosmos chain-id).")
 	generateCmd.Flags().BoolVar(&genEnv.EvmEnabled, "evm", false, "Enabled EVM support. Generates genesis with EVM state.")
 	generateCmd.Flags().BoolVar(&genEnv.ProdLike, "prod", false, "Generate config for prod-like chain (app/bft configs will be close to mainnet versions).")
 	generateCmd.Flags().IntVar(&genEnv.NumOfValidators, "validators", defaultNumOfValidators, "Number of validators to generate config for.")
@@ -175,7 +176,7 @@ func main() {
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			sendAmount := "1" + chain.DefaultBondDenom
-			ethSendProvider, err := payload.NewEthSendProvider(stressCfg.ChainID, stressCfg.MinGasPrice, sendAmount)
+			ethSendProvider, err := payload.NewEthSendProvider(big.NewInt(stressCfg.EthChainID), stressCfg.MinGasPrice, sendAmount)
 			if err != nil {
 				return errors.Wrap(err, "failed to initate eth value send stress provider")
 			}
@@ -200,7 +201,7 @@ func main() {
 
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
-			ethCallProvider, err := payload.NewEthCallProvider(stressCfg.ChainID, stressCfg.MinGasPrice)
+			ethCallProvider, err := payload.NewEthCallProvider(big.NewInt(stressCfg.EthChainID), stressCfg.MinGasPrice)
 			if err != nil {
 				return errors.Wrap(err, "failed to initate eth contract call stress provider")
 			}
@@ -225,7 +226,7 @@ func main() {
 
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
-			ethDeployProvider, err := payload.NewEthDeployProvider(stressCfg.ChainID, stressCfg.MinGasPrice)
+			ethDeployProvider, err := payload.NewEthDeployProvider(big.NewInt(stressCfg.EthChainID), stressCfg.MinGasPrice)
 			if err != nil {
 				return errors.Wrap(err, "failed to initate eth contract deploy stress provider")
 			}
@@ -252,7 +253,7 @@ func main() {
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			ethCallProvider, err := payload.NewEthInternalCallProvider(
-				stressCfg.ChainID,
+				big.NewInt(stressCfg.EthChainID),
 				stressCfg.MinGasPrice,
 				ethInternalCallIterations,
 			)
@@ -293,7 +294,7 @@ func main() {
 
 			ethUserOpProvider, err := payload.NewEthUserOpProvider(
 				ethRPCURL,
-				stressCfg.ChainID,
+				big.NewInt(stressCfg.EthChainID),
 				stressCfg.MinGasPrice,
 				userOpsSignedPace,
 				ethcmn.HexToAddress(entrypointAddress),

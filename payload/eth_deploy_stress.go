@@ -1,8 +1,9 @@
 package payload
 
 import (
+	"math/big"
+
 	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
-	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -28,7 +29,7 @@ type ethDeployProvider struct {
 // NewEthDeployProvider creates transaction factory for stress testing
 // Solidity contract transacting from multiple accounts.
 func NewEthDeployProvider(
-	chainID string,
+	ethChainID *big.Int,
 	minGasPrice string,
 ) (TxProvider, error) {
 	parsedMinGasPrice, err := sdk.ParseCoinNormalized(minGasPrice)
@@ -42,13 +43,7 @@ func NewEthDeployProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := chaintypes.ParseChainID(chainID)
-	if err != nil {
-		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
-		return nil, err
-	}
-
-	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
+	ethSigner := ethtypes.LatestSignerForChainID(ethChainID)
 
 	provider := &ethDeployProvider{
 		ethTxBuilderAndSigner: ethTxBuilderAndSigner{
@@ -83,25 +78,23 @@ func (p *ethDeployProvider) Name() string {
 func (p *ethDeployProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
-	if req.FromIdx != 0 || req.TxIdx != 0 {
-		return nil, nil
-	}
+	tx := &ethDeployTx{
+		baseTx: baseTx{
+			from: req.From,
+			msgs: []sdk.Msg{
+				evmtypes.NewTxWithData(&ethtypes.LegacyTx{
+					Nonce:    req.From.Sequence,
+					To:       nil, // deployment
+					Value:    noValue,
+					Gas:      p.maxGasLimit,
+					GasPrice: p.minGasPrice.Amount.BigInt(),
+					Data:     ethcmn.FromHex(p.contractMetaData.Bin),
+				}),
+			},
 
-	tx := &baseTx{
-		from: req.From,
-		msgs: []sdk.Msg{
-			evmtypes.NewTxWithData(&ethtypes.LegacyTx{
-				Nonce:    req.From.Sequence,
-				To:       nil, // deployment
-				Value:    noValue,
-				Gas:      p.maxGasLimit,
-				GasPrice: p.minGasPrice.Amount.BigInt(),
-				Data:     ethcmn.FromHex(p.contractMetaData.Bin),
-			}),
+			fromIdx: req.FromIdx,
+			txIdx:   req.TxIdx,
 		},
-
-		fromIdx: req.FromIdx,
-		txIdx:   req.TxIdx,
 	}
 
 	return tx, nil

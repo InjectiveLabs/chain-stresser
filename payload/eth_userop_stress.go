@@ -6,7 +6,6 @@ import (
 	"time"
 
 	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
-	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -52,8 +51,8 @@ const defaultAccountSalt = 1
 // NewEthUserOpProvider creates transaction factory for stress testing
 // Solidity contract transacting via UserOps (EIP-4337).
 func NewEthUserOpProvider(
-	ethRPCURL,
-	chainID,
+	ethRPCURL string,
+	ethChainID *big.Int,
 	minGasPrice string,
 	uoSignedPace pace.Pace,
 	entrypointAddress,
@@ -72,13 +71,7 @@ func NewEthUserOpProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := chaintypes.ParseChainID(chainID)
-	if err != nil {
-		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
-		return nil, err
-	}
-
-	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
+	ethSigner := ethtypes.LatestSignerForChainID(ethChainID)
 
 	provider := &ethUserOpProvider{
 		ethTxBuilderAndSigner: ethTxBuilderAndSigner{
@@ -91,7 +84,7 @@ func NewEthUserOpProvider(
 		maxGasLimitInitialTx: 230000,
 
 		ethRPCURL:             ethRPCURL,
-		chainID:               parsedChainID.Int64(),
+		chainID:               ethChainID.Int64(),
 		entrypointAddress:     entrypointAddress,
 		accountFactoryAddress: accountFactoryAddress,
 
@@ -104,7 +97,7 @@ func NewEthUserOpProvider(
 
 	entrypoint, err := aa.NewEntrypoint(
 		ethRPCURL,
-		parsedChainID.Int64(),
+		ethChainID.Int64(),
 		accountFactoryAddress,
 		beneficiaryAddress,
 	)

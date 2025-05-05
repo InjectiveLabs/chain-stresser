@@ -21,8 +21,11 @@ import (
 
 // StressConfig is the config for stress runner
 type StressConfig struct {
-	//  ChainID of the chain to connect to
+	// ChainID (Cosmos) of the chain to connect to
 	ChainID string
+
+	//  EthChainID (EIP-155) of the EVM chain to connect to
+	EthChainID int64
 
 	// MinGasPrice to use for sending transactions
 	MinGasPrice string

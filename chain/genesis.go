@@ -10,6 +10,7 @@ import (
 
 	"cosmossdk.io/math"
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
+	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
 	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	"github.com/cometbft/cometbft/crypto"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -149,7 +150,7 @@ func (g *Genesis) AddAccount(address sdk.AccAddress, balances string) {
 		g.accountState,
 		&chaintypes.EthAccount{
 			BaseAccount: baseAccount,
-			CodeHash:    common.BytesToHash(chaintypes.EmptyCodeHash).Bytes(),
+			CodeHash:    common.BytesToHash(evmtypes.EmptyCodeHash).Bytes(),
 		},
 	)
 

@@ -1,9 +1,10 @@
 package payload
 
 import (
+	"math/big"
+
 	"cosmossdk.io/math"
 	evmtypes "github.com/InjectiveLabs/sdk-go/chain/evm/types"
-	chaintypes "github.com/InjectiveLabs/sdk-go/chain/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -26,7 +27,7 @@ var eip1559InitialBaseFee = math.NewIntFromUint64(1000000000)
 // NewEthSendProvider creates transaction factory for stress testing
 // native eth transfers (EVM -> x/bank) between accounts.
 func NewEthSendProvider(
-	chainID string,
+	ethChainID *big.Int,
 	minGasPrice string,
 	sendAmount string,
 ) (TxProvider, error) {
@@ -47,13 +48,7 @@ func NewEthSendProvider(
 		parsedMinGasPrice.Amount = eip1559InitialBaseFee
 	}
 
-	parsedChainID, err := chaintypes.ParseChainID(chainID)
-	if err != nil {
-		err = errors.Wrapf(err, "failed to parse chainID: %s", chainID)
-		return nil, err
-	}
-
-	ethSigner := ethtypes.LatestSignerForChainID(parsedChainID)
+	ethSigner := ethtypes.LatestSignerForChainID(ethChainID)
 
 	provider := &ethSendProvider{
 		ethTxBuilderAndSigner: ethTxBuilderAndSigner{
