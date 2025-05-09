@@ -8,9 +8,9 @@
       "max_gas": "150000000"
     },
     "evidence": {
-        "max_age_num_blocks": "100000",
-        "max_age_duration": "172800000000000",
-        "max_bytes": "1048576"
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
     },
     "validator": {
       "pub_key_types": [
@@ -20,8 +20,13 @@
     "version": {
       "app": "0"
     },
-    "abci": {
-      "vote_extensions_enable_height": "0"
+    "synchrony": {
+      "precision": "505000000",
+      "message_delay": "15000000000"
+    },
+    "feature": {
+      "vote_extensions_enable_height": "0",
+      "pbts_enable_height": "0"
     }
   },
   "app_hash": "",

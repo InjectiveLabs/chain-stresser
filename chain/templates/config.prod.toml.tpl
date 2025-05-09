@@ -8,7 +8,7 @@
 
 # The version of the CometBFT binary that created or
 # last modified the config file. Do not modify this.
-version = "0.38.10"
+version = "1.0.1"
 
 #######################################################################
 ###                   Main Base Config Options                      ###
@@ -21,25 +21,29 @@ proxy_app = "tcp://127.0.0.1:26658"
 # A custom human readable name for this node
 moniker = "{{.Moniker}}"
 
-# Database backend: goleveldb | cleveldb | boltdb | rocksdb | badgerdb
-# * goleveldb (github.com/syndtr/goleveldb - most popular implementation)
-#   - pure go
+# Database backend: badgerdb | goleveldb | pebbledb | rocksdb | cleveldb | boltdb
+# * badgerdb (uses github.com/dgraph-io/badger)
 #   - stable
+#   - pure go
+#   - use badgerdb build tag (go build -tags badgerdb)
+# * goleveldb (github.com/syndtr/goleveldb)
+#   - UNMAINTAINED
+#   - stable
+#   - pure go
+# * pebbledb (uses github.com/cockroachdb/pebble)
+#   - stable
+#   - pure go
+# * rocksdb (uses github.com/linxGnu/grocksdb)
+#   - requires gcc
+#   - use rocksdb build tag (go build -tags rocksdb)
 # * cleveldb (uses levigo wrapper)
-#   - fast
+#   - DEPRECATED
 #   - requires gcc
 #   - use cleveldb build tag (go build -tags cleveldb)
 # * boltdb (uses etcd's fork of bolt - github.com/etcd-io/bbolt)
-#   - EXPERIMENTAL
-#   - may be faster is some use-cases (random reads - indexer)
+#   - DEPRECATED
+#   - stable
 #   - use boltdb build tag (go build -tags boltdb)
-# * rocksdb (uses github.com/tecbot/gorocksdb)
-#   - EXPERIMENTAL
-#   - requires gcc
-#   - use rocksdb build tag (go build -tags rocksdb)
-# * badgerdb (uses github.com/dgraph-io/badger)
-#   - EXPERIMENTAL
-#   - use badgerdb build tag (go build -tags badgerdb)
 db_backend = "goleveldb"
 
 # Database directory
@@ -76,6 +80,7 @@ abci = "socket"
 # so the app can decide if we should keep the connection or not
 filter_peers = false
 
+
 #######################################################################
 ###                 Advanced Configuration Options                  ###
 #######################################################################
@@ -94,29 +99,15 @@ laddr = "tcp://127.0.0.1:26657"
 cors_allowed_origins = []
 
 # A list of methods the client is allowed to use with cross-domain requests
-cors_allowed_methods = ["HEAD", "GET", "POST"]
+cors_allowed_methods = ["HEAD", "GET", "POST", ]
 
 # A list of non simple headers the client is allowed to use with cross-domain requests
-cors_allowed_headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
-
-# TCP or UNIX socket address for the gRPC server to listen on
-# NOTE: This server only supports /broadcast_tx_commit
-grpc_laddr = ""
-
-# Maximum number of simultaneous connections.
-# Does not include RPC (HTTP&WebSocket) connections. See max_open_connections
-# If you want to accept a larger number than the default, make sure
-# you increase your OS limits.
-# 0 - unlimited.
-# Should be < {ulimit -Sn} - {MaxNumInboundPeers} - {MaxNumOutboundPeers} - {N of wal, db and other open files}
-# 1024 - 40 - 10 - 50 = 924 = ~900
-grpc_max_open_connections = 900
+cors_allowed_headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time", ]
 
 # Activate unsafe RPC commands like /dial_seeds and /unsafe_flush_mempool
 unsafe = false
 
 # Maximum number of simultaneous connections (including WebSocket).
-# Does not include gRPC connections. See grpc_max_open_connections
 # If you want to accept a larger number than the default, make sure
 # you increase your OS limits.
 # 0 - unlimited.
@@ -124,14 +115,14 @@ unsafe = false
 # 1024 - 40 - 10 - 50 = 924 = ~900
 max_open_connections = 900
 
-# Maximum number of unique clientIDs that can /subscribe
+# Maximum number of unique clientIDs that can /subscribe.
 # If you're using /broadcast_tx_commit, set to the estimated maximum number
 # of broadcast_tx_commit calls per block.
 max_subscription_clients = 100
 
-# Maximum number of unique queries a given client can /subscribe to
-# If you're using GRPC (or Local RPC client) and /broadcast_tx_commit, set to
-# the estimated # maximum number of broadcast_tx_commit calls per block.
+# Maximum number of unique queries a given client can /subscribe to.
+# If you're using /broadcast_tx_commit, set to the estimated maximum number
+# of broadcast_tx_commit calls per block.
 max_subscriptions_per_client = 5
 
 # Experimental parameter to specify the maximum number of events a node will
@@ -189,12 +180,72 @@ tls_cert_file = ""
 
 # The path to a file containing matching private key that is used to create the HTTPS server.
 # Might be either absolute path or path related to CometBFT's config directory.
-# NOTE: both tls-cert-file and tls-key-file must be present for CometBFT to create HTTPS server.
+# NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
 # Otherwise, HTTP server is run.
 tls_key_file = ""
 
 # pprof listen address (https://golang.org/pkg/net/http/pprof)
 pprof_laddr = "localhost:6060"
+
+#######################################################
+###       gRPC Server Configuration Options         ###
+#######################################################
+
+#
+# Note that the gRPC server is exposed unauthenticated. It is critical that
+# this server not be exposed directly to the public internet. If this service
+# must be accessed via the public internet, please ensure that appropriate
+# precautions are taken (e.g. fronting with a reverse proxy like nginx with TLS
+# termination and authentication, using DDoS protection services like
+# CloudFlare, etc.).
+#
+
+[grpc]
+
+# TCP or UNIX socket address for the RPC server to listen on. If not specified,
+# the gRPC server will be disabled.
+laddr = ""
+
+#
+# Each gRPC service can be turned on/off, and in some cases configured,
+# individually. If the gRPC server is not enabled, all individual services'
+# configurations are ignored.
+#
+
+# The gRPC version service provides version information about the node and the
+# protocols it uses.
+[grpc.version_service]
+enabled = true
+
+# The gRPC block service returns block information
+[grpc.block_service]
+enabled = true
+
+# The gRPC block results service returns block results for a given height. If no height
+# is given, it will return the block results from the latest height.
+[grpc.block_results_service]
+enabled = true
+
+#
+# Configuration for privileged gRPC endpoints, which should **never** be exposed
+# to the public internet.
+#
+[grpc.privileged]
+# The host/port on which to expose privileged gRPC endpoints.
+laddr = ""
+
+#
+# Configuration specifically for the gRPC pruning service, which is considered a
+# privileged service.
+#
+[grpc.privileged.pruning_service]
+
+# Only controls whether the pruning service is accessible via the gRPC API - not
+# whether a previously set pruning service retain height is honored by the
+# node. See the [storage.pruning] section for control over pruning.
+#
+# Disabled by default.
+enabled = false
 
 #######################################################
 ###           P2P Configuration Options             ###
@@ -262,11 +313,11 @@ private_peer_ids = ""
 allow_duplicate_ip = false
 
 # Peer connection configuration.
-dial_timeout = "3s"
 handshake_timeout = "20s"
+dial_timeout = "3s"
 
 #######################################################
-###          Mempool Configuration Option          ###
+###          Mempool Configuration Options          ###
 #######################################################
 [mempool]
 
@@ -280,7 +331,7 @@ handshake_timeout = "20s"
 #  not supported.
 type = "flood"
 
-# Recheck (default: true) defines whether CometBFT should recheck the
+# recheck (default: true) defines whether CometBFT should recheck the
 # validity for all remaining transaction in the mempool after a block.
 # Since a block affects the application state, some transactions in the
 # mempool may become invalid. If this does not apply to your application,
@@ -288,36 +339,35 @@ type = "flood"
 recheck = true
 
 # recheck_timeout is the time the application has during the rechecking process
-# to return CheckTx responses, once all requests have been sent. Responses that 
-# arrive after the timeout expires are discarded. It only applies to 
+# to return CheckTx responses, once all requests have been sent. Responses that
+# arrive after the timeout expires are discarded. It only applies to
 # non-local ABCI clients and when recheck is enabled.
-#
-# The ideal value will strongly depend on the application. It could roughly be estimated as the
-# average size of the mempool multiplied by the average time it takes the application to validate one
-# transaction. We consider that the ABCI application runs in the same location as the CometBFT binary
-# so that the recheck duration is not affected by network delays when making requests and receiving responses.
 recheck_timeout = "1s"
 
-# Broadcast (default: true) defines whether the mempool should relay
+# broadcast (default: true) defines whether the mempool should relay
 # transactions to other peers. Setting this to false will stop the mempool
 # from relaying transactions to other peers until they are included in a
 # block. In other words, if Broadcast is disabled, only the peer you send
 # the tx to will see it until it is included in a block.
 broadcast = true
 
-# WalPath (default: "") configures the location of the Write Ahead Log
+# wal_dir (default: "") configures the location of the Write Ahead Log
 # (WAL) for the mempool. The WAL is disabled by default. To enable, set
-# WalPath to where you want the WAL to be written (e.g.
+# wal_dir to where you want the WAL to be written (e.g.
 # "data/mempool.wal").
 wal_dir = ""
 
 # Maximum number of transactions in the mempool
 size = 500
 
-# Limit the total size of all txs in the mempool.
-# This only accounts for raw transactions (e.g. given 1MB transactions and
-# max_txs_bytes=5MB, mempool will only accept 5 transactions).
-max_txs_bytes = 1073741824
+# Maximum size in bytes of a single transaction accepted into the mempool.
+max_tx_bytes = 1048576
+
+# The maximum size in bytes of all transactions stored in the mempool.
+# This is the raw, total transaction size. For example, given 1MB
+# transactions and a 5MB maximum mempool byte size, the mempool will
+# only accept five transactions.
+max_txs_bytes = 67108864
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = 10000
@@ -326,15 +376,6 @@ cache_size = 10000
 # Set to true if it's not possible for any invalid transaction to become valid
 # again in the future.
 keep-invalid-txs-in-cache = false
-
-# Maximum size of a single transaction.
-# NOTE: the max size of a tx transmitted over the network is {max_tx_bytes}.
-max_tx_bytes = 1048576
-
-# Maximum size of a batch of transactions to send to a peer
-# Including space needed by encoding (one varint per transaction).
-# XXX: Unused due to https://github.com/tendermint/tendermint/issues/5796
-max_batch_bytes = 0
 
 # Experimental parameters to limit gossiping txs to up to the specified number of peers.
 # We use two independent upper values for persistent and non-persistent peers.
@@ -348,8 +389,23 @@ max_batch_bytes = 0
 # number of active connections to that group of peers is not bounded.
 # For non-persistent peers, if enabled, a value of 10 is recommended based on experimental
 # performance results using the default P2P configuration.
-experimental_max_gossip_connections_to_non_persistent_peers = 0
 experimental_max_gossip_connections_to_persistent_peers = 0
+experimental_max_gossip_connections_to_non_persistent_peers = 0
+
+# When using the Flood mempool type, enable the DOG gossip protocol to
+# reduce network bandwidth on transaction dissemination (for details, see
+# specs/mempool/gossip/).
+dog_protocol_enabled = true
+
+# Used by the DOG protocol to set the desired transaction redundancy level
+# for the node. For example, redundancy of 0.5 means that, for every two first-time
+# transactions received, the node will receive one duplicate transaction.
+dog_target_redundancy = 1
+
+# Used by the DOG protocol to set how often it will attempt to adjust the
+# redundancy level. The higher the value, the longer it will take the node
+# to reduce bandwidth and converge to a stable redundancy level.
+dog_adjust_interval = "1s"
 
 #######################################################
 ###         State Sync Configuration Options        ###
@@ -369,8 +425,8 @@ enable = false
 # For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
 # weeks) during which they can be financially punished (slashed) for misbehavior.
 rpc_servers = ""
-trust_hash = ""
 trust_height = 0
+trust_hash = ""
 trust_period = "168h0m0s"
 
 # Time to spend discovering snapshots before initiating a restore.
@@ -422,7 +478,11 @@ timeout_precommit_delta = "100ms"
 # How long we wait after committing a block, before starting on the new
 # height (this gives us a chance to receive some more precommits, even
 # though we already have +2/3).
+# Set to 0 if you want to make progress as soon as the node has all the precommits.
 timeout_commit = "500ms"
+
+# Deprecated: set `timeout_commit` to 0 instead.
+skip_timeout_commit = false
 
 # How many blocks to look back to check existence of the node's consensus votes before joining consensus
 # When non-zero, the node will panic upon restart
@@ -430,15 +490,13 @@ timeout_commit = "500ms"
 # So, validators should stop the state machine, wait for some blocks, and then restart the state machine to avoid panic.
 double_sign_check_height = 0
 
-# Make progress as soon as we have all the precommits (as if TimeoutCommit = 0)
-skip_timeout_commit = false
-
 # EmptyBlocks mode and possible interval between empty blocks
 create_empty_blocks = true
 create_empty_blocks_interval = "0s"
 
 # Reactor sleep duration parameters
 peer_gossip_sleep_duration = "10ms"
+peer_gossip_intraloop_sleep_duration = "0s"
 peer_query_maj23_sleep_duration = "2s"
 
 #######################################################
@@ -451,6 +509,60 @@ peer_query_maj23_sleep_duration = "2s"
 # persisted. ABCI responses are required for /block_results RPC queries, and to
 # reindex events in the command-line tool.
 discard_abci_responses = {{.DiscardABCIResponses}}
+
+# The representation of keys in the database.
+# The current representation of keys in Comet's stores is considered to be v1
+# Users can experiment with a different layout by setting this field to v2.
+# Note that this is an experimental feature and switching back from v2 to v1
+# is not supported by CometBFT.
+# If the database was initially created with v1, it is necessary to migrate the DB
+# before switching to v2. The migration is not done automatically.
+# v1 - the legacy layout existing in Comet prior to v1.
+# v2 - Order preserving representation ordering entries by height.
+experimental_db_key_layout = "v1"
+
+# If set to true, CometBFT will force compaction to happen for databases that support this feature.
+# and save on storage space. Setting this to true is most benefits when used in combination
+# with pruning as it will physically delete the entries marked for deletion.
+# false by default (forcing compaction is disabled).
+compact = false
+
+# To avoid forcing compaction every time, this parameter instructs CometBFT to wait
+# the given amount of blocks to be pruned before triggering compaction.
+# It should be tuned depending on the number of items. If your retain height is 1 block,
+# it is too much of an overhead to try compaction every block. But it should also not be a very
+# large multiple of your retain height as it might occur bigger overheads.
+compaction_interval = "1000"
+
+[storage.pruning]
+
+# The time period between automated background pruning operations.
+interval = "10s"
+
+#
+# Storage pruning configuration relating only to the data companion.
+#
+[storage.pruning.data_companion]
+
+# Whether automatic pruning respects values set by the data companion. Disabled
+# by default. All other parameters in this section are ignored when this is
+# disabled.
+#
+# If disabled, only the application retain height will influence block pruning
+# (but not block results pruning). Only enabling this at a later stage will
+# potentially mean that blocks below the application-set retain height at the
+# time will not be available to the data companion.
+enabled = false
+
+# The initial value for the data companion block retain height if the data
+# companion has not yet explicitly set one. If the data companion has already
+# set a block retain height, this is ignored.
+initial_block_retain_height = 0
+
+# The initial value for the data companion block results retain height if the
+# data companion has not yet explicitly set one. If the data companion has
+# already set a block results retain height, this is ignored.
+initial_block_results_retain_height = 0
 
 #######################################################
 ###   Transaction Indexer Configuration Options     ###
@@ -485,7 +597,7 @@ psql-conn = ""
 prometheus = false
 
 # Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = "127.0.0.1:26660"
+prometheus_listen_addr = ":26660"
 
 # Maximum number of simultaneous connections.
 # If you want to accept a larger number than the default, make sure

@@ -68,10 +68,8 @@ func (nodeConfig *NodeConfig) Save(homeDir string) {
 	cfg.P2P.MaxNumInboundPeers = 100
 	cfg.RPC.MaxSubscriptionClients = 10000
 	cfg.RPC.MaxOpenConnections = 10000
-	cfg.RPC.GRPCMaxOpenConnections = 10000
 	cfg.RPC.MaxSubscriptionsPerClient = 10000
 	cfg.Mempool.Size = 50000
-	cfg.Mempool.MaxTxsBytes = 5368709120
 	cfg.Instrumentation.Prometheus = true
 	cfg.Instrumentation.PrometheusListenAddr = net.JoinHostPort(nodeConfig.IP.String(), strconv.Itoa(nodeConfig.PrometheusPort))
 	cfg.Moniker = nodeConfig.Moniker

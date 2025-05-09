@@ -4,7 +4,7 @@
   "initial_height": "1",
   "consensus_params": {
     "block": {
-      "max_bytes": "104857600",
+      "max_bytes": "4194304",
       "max_gas": "10000000000"
     },
     "evidence": {
@@ -20,8 +20,13 @@
     "version": {
       "app": "0"
     },
-    "abci": {
-      "vote_extensions_enable_height": "0"
+    "synchrony": {
+      "precision": "505000000",
+      "message_delay": "15000000000"
+    },
+    "feature": {
+      "vote_extensions_enable_height": "0",
+      "pbts_enable_height": "0"
     }
   },
   "app_hash": "",
