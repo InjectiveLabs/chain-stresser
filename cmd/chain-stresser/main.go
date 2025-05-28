@@ -70,7 +70,8 @@ func main() {
 		},
 	}
 
-	rootCmd.PersistentFlags().Int64Var(&stressCfg.EthChainID, "chain-id", defaultEthChainID, "Expected EIP-155 chain ID of the EVM.")
+	rootCmd.PersistentFlags().StringVar(&stressCfg.ChainID, "chain-id", defaultChainID, "Expected Cosmos chain ID of the chain to connect to.")
+	rootCmd.PersistentFlags().Int64Var(&stressCfg.EthChainID, "eth-chain-id", defaultEthChainID, "Expected EIP-155 chain ID of the EVM.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.MinGasPrice, "min-gas-price", defaultMinGasPrice, "Minimum gas price to pay for each transaction.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "localhost:26657", "Address of a injectived node RPC to connect to.")
 	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", true, "Await for transaction to be included in a block.")
