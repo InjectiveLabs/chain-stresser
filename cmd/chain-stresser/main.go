@@ -322,6 +322,36 @@ func main() {
 	txEthUserOpCmd.Flags().StringVar(&counterContractAddr, "counter-address", "0x590d9D4654FC262BFE72d115355db2aEb7DB902f", "Counter contract address")
 	rootCmd.AddCommand(txEthUserOpCmd)
 
+	var spotMarketIDs []string
+	var derivativeMarketIDs []string
+
+	txExchangeBatchOrdersCmd := &cobra.Command{
+		Use:   "tx-exchange-batch-orders",
+		Short: "Run stresstest with x/exchange.MsgBatchUpdateOrders transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			exchangeBatchOrdersProvider, err := payload.NewExchangeBatchOrdersProvider(stressCfg.MinGasPrice, spotMarketIDs, derivativeMarketIDs)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, exchangeBatchOrdersProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	txExchangeBatchOrdersCmd.Flags().StringSliceVar(&spotMarketIDs, "spot-market-ids", []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}, "Comma-separated list of spot market IDs to update.")
+	txExchangeBatchOrdersCmd.Flags().StringSliceVar(&derivativeMarketIDs, "derivative-market-ids", []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}, "Comma-separated list of derivative market IDs to update.")
+	rootCmd.AddCommand(txExchangeBatchOrdersCmd)
+
 	orPanic(rootCmd.Execute())
 }
 
