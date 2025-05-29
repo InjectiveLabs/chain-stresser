@@ -53,6 +53,21 @@ func Stress(
 	txProvider payload.TxProvider,
 ) error {
 	logger := log.WithField("bench", txProvider.Name())
+
+	if config.EthChainID == 0 {
+		logger.WithFields(log.Fields{
+			"chainID":    config.ChainID,
+			"ethChainID": config.EthChainID,
+		}).Fatal("❌ EthChainID is required")
+	}
+
+	if config.ChainID == "" {
+		logger.WithFields(log.Fields{
+			"chainID":    config.ChainID,
+			"ethChainID": config.EthChainID,
+		}).Fatal("❌ ChainID is required")
+	}
+
 	client := chain.NewClient(config.ChainID, config.NodeAddress)
 
 	startTs := time.Now()
