@@ -141,7 +141,25 @@
           "merge_netsplit_block": "0",
           "shanghai_time": "0",
           "cancun_time": "0",
-          "prague_time": "0"
+          "prague_time": "0",
+          "blob_schedule_config": {
+            "cancun": {
+              "target": "3",
+              "max": "6",
+              "base_fee_update_fraction": "3338477"
+            },
+            "prague": {
+              "target": "6",
+              "max": "9",
+              "base_fee_update_fraction": "5007716"
+            },
+            "osaka": {
+              "target": "6",
+              "max": "9",
+              "base_fee_update_fraction": "5007716"
+            },
+            "verkle": null
+          }
         },
         "allow_unprotected_txs": true
       }
