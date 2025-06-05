@@ -74,6 +74,7 @@ func main() {
 	rootCmd.PersistentFlags().Int64Var(&stressCfg.EthChainID, "eth-chain-id", defaultEthChainID, "Expected EIP-155 chain ID of the EVM.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.MinGasPrice, "min-gas-price", defaultMinGasPrice, "Minimum gas price to pay for each transaction.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "localhost:26657", "Address of a injectived node RPC to connect to.")
+	rootCmd.PersistentFlags().StringVar(&stressCfg.GRPCAddress, "grpc-addr", "localhost:9900", "Address of a injectived node GRPC to connect to.")
 	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", true, "Await for transaction to be included in a block.")
 	rootCmd.PersistentFlags().BoolVar(&verboseOutput, "verbose", false, "Verbosely output debugging information.")
 	rootCmd.PersistentFlags().StringVar(&accountFile, "accounts", "accounts.json", "Path to a JSON file containing private keys of accounts to use for stress testing.")
@@ -352,6 +353,81 @@ func main() {
 	txExchangeBatchOrdersCmd.Flags().StringSliceVar(&spotMarketIDs, "spot-market-ids", []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}, "Comma-separated list of spot market IDs to update.")
 	txExchangeBatchOrdersCmd.Flags().StringSliceVar(&derivativeMarketIDs, "derivative-market-ids", []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}, "Comma-separated list of derivative market IDs to update.")
 	rootCmd.AddCommand(txExchangeBatchOrdersCmd)
+
+	txExecContractCmd := &cobra.Command{
+		Use:   "tx-exec-wasm-contract",
+		Short: "Run stresstest with x/wasm.MsgExecuteContract transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			execContractProvider, err := payload.NewWasmExecProvider(stressCfg.MinGasPrice)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, execContractProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txExecContractCmd)
+
+	txWasmDeployContractCmd := &cobra.Command{
+		Use:   "tx-deploy-wasm-contract",
+		Short: "Run stresstest with x/wasm.MsgStoreCode transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			deployContractProvider, err := payload.NewWasmDeployProvider(stressCfg.MinGasPrice)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, deployContractProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txWasmDeployContractCmd)
+
+	txWasmInitContractCmd := &cobra.Command{
+		Use:   "tx-init-wasm-contract",
+		Short: "Run stresstest with x/wasm.MsgInstantiateContract transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			initContractProvider, err := payload.NewWasmInitProvider(stressCfg.MinGasPrice)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, initContractProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txWasmInitContractCmd)
 
 	orPanic(rootCmd.Execute())
 }

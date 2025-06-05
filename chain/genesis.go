@@ -95,7 +95,7 @@ func NewGenesis(genConfig *GenesisConfig) *Genesis {
 	var appState map[string]json.RawMessage
 	orPanic(json.Unmarshal(genesisDoc.AppState, &appState))
 
-	clientCtx := NewContext(genConfig.ChainID, nil)
+	clientCtx := NewContext(genConfig.ChainID, nil, nil)
 	authState := authtypes.GetGenesisStateFromAppState(clientCtx.Codec, appState)
 	accountState, err := authtypes.UnpackAccounts(authState.Accounts)
 	orPanic(err)
