@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"math/rand"
 
 	"cosmossdk.io/math"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
@@ -53,14 +54,14 @@ func (p *wasmExecProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
 	sender := req.From.Key.AccAddress()
-	amount := math.NewInt(1000)
+	amount := rand.Intn(10000) + 1
 	msg := &wasmtypes.MsgExecuteContract{
 		Sender:   sender,
 		Contract: sender,
-		Msg:      []byte(fmt.Sprintf(`{"mint":{"recipient": %q,"amount": "%q"}}`, sender, amount)),
+		Msg:      []byte(fmt.Sprintf(`{"mint":{"recipient": %q,"amount": "%d"}}`, sender, amount)),
 		Funds: sdk.Coins{{
 			Denom:  "inj",
-			Amount: amount,
+			Amount: math.NewInt(1),
 		}},
 	}
 
