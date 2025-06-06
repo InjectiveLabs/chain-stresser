@@ -23,8 +23,8 @@ type wasmDeployProvider struct {
 	memoAttach  string
 }
 
-// NewExchangeBatchUpdateProvider creates transaction factory for stress testing
-// exchange batch updates.
+// NewWasmDeployProvider creates transaction factory for stress testing
+// wasm contract deployment.
 func NewWasmDeployProvider(
 	minGasPrice string,
 ) (TxProvider, error) {

@@ -90,7 +90,7 @@ func (p *wasmExecProvider) BuildAndSignTx(
 
 	msgs := unsignedTx.Msgs()
 	msgIndex := unsignedTx.TxIdx()
-	if msgIndex+1 >= len(msgs) {
+	if msgIndex >= len(msgs) {
 		msgIndex = 0
 	}
 

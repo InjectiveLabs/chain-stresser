@@ -366,7 +366,7 @@ func main() {
 
 			execContractProvider, err := payload.NewWasmExecProvider(stressCfg.MinGasPrice)
 			if err != nil {
-				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+				return errors.Wrap(err, "failed to initiate wasm exec stress provider")
 			}
 
 			if err := stresser.Stress(rootCtx, stressCfg, execContractProvider); err != nil {
@@ -391,7 +391,7 @@ func main() {
 
 			deployContractProvider, err := payload.NewWasmDeployProvider(stressCfg.MinGasPrice)
 			if err != nil {
-				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+				return errors.Wrap(err, "failed to initiate wasm deploy contract stress provider")
 			}
 
 			if err := stresser.Stress(rootCtx, stressCfg, deployContractProvider); err != nil {
@@ -416,7 +416,7 @@ func main() {
 
 			initContractProvider, err := payload.NewWasmInitProvider(stressCfg.MinGasPrice)
 			if err != nil {
-				return errors.Wrap(err, "failed to initate exchange batch orders stress provider")
+				return errors.Wrap(err, "failed to initiate wasm init contract stress provider")
 			}
 
 			if err := stresser.Stress(rootCtx, stressCfg, initContractProvider); err != nil {

@@ -72,7 +72,7 @@ func (p *exchangeBatchOrdersProvider) GenerateTx(
 	sender := req.From.Key.AccAddress()
 
 	for i, marketID := range p.derivativeMarketIDs {
-		price := price.Add(math.LegacyNewDec(int64(i * 1000)))
+		price = price.Add(math.LegacyNewDec(int64(i * 1000)))
 
 		derivativeOrder := &exchangetypes.DerivativeOrder{
 			MarketId:  string(marketID),
@@ -98,7 +98,7 @@ func (p *exchangeBatchOrdersProvider) GenerateTx(
 
 	shouldCancelSpot := r.Intn(2) > 0 // && false
 	for i, marketID := range p.spotMarketIDs {
-		price := price.Add(math.LegacyNewDec(int64(i * 1000)))
+		price = price.Add(math.LegacyNewDec(int64(i * 1000)))
 		spotOrder := &exchangetypes.SpotOrder{
 			MarketId:  string(marketID),
 			OrderType: exchangetypes.OrderType_BUY,
