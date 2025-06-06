@@ -1,8 +1,6 @@
 module github.com/InjectiveLabs/chain-stresser/v2
 
-go 1.23.5
-
-toolchain go1.23.8
+go 1.23.8
 
 require (
 	cosmossdk.io/errors v1.0.1

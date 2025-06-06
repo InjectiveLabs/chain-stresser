@@ -9,6 +9,7 @@ import (
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
+	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
 	retry "github.com/avast/retry-go/v4"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -17,6 +18,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -28,11 +31,14 @@ const (
 var errRetry = errors.New("retry required")
 
 // TODO: replace with https://github.com/InjectiveLabs/sdk-go/tree/master/client/chain
-func NewClient(chainID string, addr string) Client {
+func NewClient(chainID string, addr string, grpcAddr string) Client {
 	rpcClient, err := client.NewClientFromNode("tcp://" + addr)
 	orPanic(err)
 
-	clientCtx := NewContext(chainID, rpcClient)
+	grpcClient, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	orPanic(err)
+
+	clientCtx := NewContext(chainID, rpcClient, grpcClient)
 
 	return Client{
 		clientCtx: clientCtx,
@@ -222,6 +228,10 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 			t.Reset(defaultBroadcastStatusPoll)
 		}
 	}
+}
+
+func (c Client) NewWasmQueryClient() wasmtypes.QueryClient {
+	return wasmtypes.NewQueryClient(c.clientCtx.GRPCClient)
 }
 
 func isTxInMempool(errRes *sdk.TxResponse) bool {
