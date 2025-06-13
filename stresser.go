@@ -33,6 +33,9 @@ type StressConfig struct {
 	// RPC address of the node to connect to
 	NodeAddress string
 
+	// GRPC address of the node to connect to
+	GRPCAddress string
+
 	// Account privkeys to use for sending transactions
 	Accounts []chain.Secp256k1PrivateKey
 
@@ -68,7 +71,7 @@ func Stress(
 		}).Fatal("❌ ChainID is required")
 	}
 
-	client := chain.NewClient(config.ChainID, config.NodeAddress)
+	client := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 
 	startTs := time.Now()
 	signedTxPace := pace.New("signed tx", 10*time.Second, NewPaceReporter(logger))
@@ -268,7 +271,7 @@ func Stress(
 					accountIdx := accountIdx
 
 					initialSequence := initialAccountSequences[accountIdx]
-					accountClient := chain.NewClient(config.ChainID, config.NodeAddress)
+					accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 
 					spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
 						defer catcher.Catch(
