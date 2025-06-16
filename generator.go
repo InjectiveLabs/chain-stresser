@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 
 	tmed25519 "github.com/cometbft/cometbft/crypto/ed25519"
 
@@ -19,8 +21,11 @@ type GeneratorEnvironment struct {
 	NumOfSentryNodes         int
 	NumOfInstances           int
 	NumOfAccountsPerInstance int
+	DockerImage              string
+	DockerSubnet             string
 	OutDirectory             string
 	ProdLike                 bool
+	Debug                    bool
 }
 
 const (
@@ -50,8 +55,8 @@ func GenerateConfigs(
 		panic("number of validators must be greater than 0")
 	}
 
-	dir := env.OutDirectory + "/chain-stresser-deploy"
-	if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+	rootOutDir := env.OutDirectory + "/chain-stresser-deploy"
+	if err := os.RemoveAll(rootOutDir); err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
 
@@ -62,15 +67,18 @@ func GenerateConfigs(
 		ProdLike:   env.ProdLike,
 	})
 
-	nodeIDs := make([]string, 0, env.NumOfValidators)
+	persistentValidatorPeers := make([]string, 0, env.NumOfValidators)
+	validatorNodeIDs := make([]string, 0, env.NumOfValidators)
+	allNodeConfigs := make([]chain.NodeConfig, 0, env.NumOfValidators+env.NumOfSentryNodes)
+
 	for i := 0; i < env.NumOfValidators; i++ {
 		nodePrivateKey := tmed25519.GenPrivKey()
 		validatorPrivateKey := tmed25519.GenPrivKey()
-		nodeIDs = append(nodeIDs, chain.NodeID(nodePrivateKey.PubKey()))
 
 		stakerPublicKey, stakerPrivateKey := chain.GenerateSecp256k1Key()
 
-		valDir := fmt.Sprintf("%s/validators/%d", dir, i)
+		relativeNodeDir := fmt.Sprintf("validators/%d", i)
+		valDir := fmt.Sprintf("%s/%s", rootOutDir, relativeNodeDir)
 
 		txIndexerKind := chain.TxIndexerKV
 		if env.ProdLike {
@@ -78,28 +86,40 @@ func GenerateConfigs(
 		}
 
 		nodeConfig := &chain.NodeConfig{
+			Home:                 fmt.Sprintf("./%s", relativeNodeDir),
 			Moniker:              fmt.Sprintf("validator-%d", i),
-			IP:                   net.IPv4zero,
-			PrometheusPort:       chain.DefaultPorts.Prometheus,
+			PeerID:               chain.NodeID(nodePrivateKey.PubKey()),
+			IPListen:             net.IPv4zero,
+			IPAddr:               ipInSubnet(env.DockerSubnet, i+1),
+			Ports:                chain.DefaultPorts,
 			NodeKey:              nodePrivateKey,
 			ValidatorKey:         validatorPrivateKey,
 			ProdLike:             env.ProdLike,
 			TxIndexer:            txIndexerKind,
-			DiscardABCIResponses: env.ProdLike, // discard in prod
+			DiscardABCIResponses: env.ProdLike,                        // discard in prod
+			PortsExposed:         env.NumOfSentryNodes == 0 && i == 0, // expose ports only for the first validator (and no sentry nodes)
 		}
 		nodeConfig.Save(valDir)
+
+		allNodeConfigs = append(allNodeConfigs, *nodeConfig)
+		validatorNodeIDs = append(validatorNodeIDs, nodeConfig.PeerID)
+		persistentValidatorPeers = append(persistentValidatorPeers,
+			fmt.Sprintf("%s@%s:%d", validatorNodeIDs[i], nodeConfig.IPAddr.String(), nodeConfig.Ports.P2P),
+		)
 
 		appConfig := &chain.AppConfig{
 			MinimumGasPrices: minimumGasPrices,
 			EVMEnabled:       env.EvmEnabled,
 			ProdLike:         env.ProdLike,
+			IPListen:         net.IPv4zero,
+			PortsExposed:     env.NumOfSentryNodes == 0 && i == 0, // expose ports only for the first validator (and no sentry nodes)
 		}
 		appConfig.Save(valDir)
 
 		genesis.AddAccount(stakerPublicKey.Address(), initialBalanceStaker)
 		genesis.AddValidator(validatorPrivateKey.PubKey(), stakerPrivateKey, initialBalanceBonded)
 	}
-	orPanic(os.WriteFile(dir+"/validators/ids.json", bytesOrPanic(json.Marshal(nodeIDs)), 0o600))
+	orPanic(os.WriteFile(rootOutDir+"/validators/ids.json", bytesOrPanic(json.Marshal(validatorNodeIDs)), 0o600))
 
 	for i := 0; i < env.NumOfInstances; i++ {
 		accounts := make([]chain.Secp256k1PrivateKey, 0, env.NumOfAccountsPerInstance)
@@ -110,7 +130,7 @@ func GenerateConfigs(
 			genesis.AddAccount(accountPublicKey.Address(), initialBalanceAccount)
 		}
 
-		instanceDir := fmt.Sprintf("%s/instances/%d", dir, i)
+		instanceDir := fmt.Sprintf("%s/instances/%d", rootOutDir, i)
 		orPanic(os.MkdirAll(instanceDir, 0o700))
 
 		accountsJSON := bytesOrPanic(json.Marshal(accounts))
@@ -118,39 +138,110 @@ func GenerateConfigs(
 	}
 
 	for i := 0; i < env.NumOfValidators; i++ {
-		genesis.Save(fmt.Sprintf("%s/validators/%d", dir, i))
+		genesis.Save(fmt.Sprintf("%s/validators/%d", rootOutDir, i))
 	}
 
 	if env.NumOfSentryNodes > 0 {
-		nodeIDs = make([]string, 0, env.NumOfSentryNodes)
+		sentryNodeIDs := make([]string, 0, env.NumOfSentryNodes)
 		for i := 0; i < env.NumOfSentryNodes; i++ {
 			nodePrivateKey := tmed25519.GenPrivKey()
+			relativeNodeDir := fmt.Sprintf("sentry-nodes/%d", i)
+			nodeDir := fmt.Sprintf("%s/%s", rootOutDir, relativeNodeDir)
 
 			nodeConfig := &chain.NodeConfig{
+				Home:                 fmt.Sprintf("./%s", relativeNodeDir),
 				Moniker:              fmt.Sprintf("sentry-node-%d", i),
-				IP:                   net.IPv4zero,
-				PrometheusPort:       chain.DefaultPorts.Prometheus,
+				PeerID:               chain.NodeID(nodePrivateKey.PubKey()),
+				IPListen:             net.IPv4zero,
+				IPAddr:               ipInSubnet(env.DockerSubnet, env.NumOfValidators+i+1),
+				Ports:                chain.DefaultPorts,
 				NodeKey:              nodePrivateKey,
 				ProdLike:             env.ProdLike,
 				TxIndexer:            chain.TxIndexerKV,
 				DiscardABCIResponses: false,
+				PortsExposed:         i == 0, // expose ports only for the first sentry node
+				DependsOn:            makeIntRange(0, env.NumOfValidators),
+				PersistentPeers:      strings.Join(persistentValidatorPeers, ","),
+				PrivatePeerIds:       strings.Join(validatorNodeIDs[:env.NumOfValidators], ","),
 			}
+			allNodeConfigs = append(allNodeConfigs, *nodeConfig)
 
 			appConfig := &chain.AppConfig{
 				MinimumGasPrices: minimumGasPrices,
 				EVMEnabled:       env.EvmEnabled,
 				ProdLike:         env.ProdLike,
+				IPListen:         net.IPv4zero,
+				PortsExposed:     i == 0, // expose ports only for the first sentry node
 			}
 
-			nodeDir := fmt.Sprintf("%s/sentry-nodes/%d", dir, i)
 			nodeConfig.Save(nodeDir)
 			appConfig.Save(nodeDir)
 			genesis.Save(nodeDir)
 
-			nodeIDs = append(nodeIDs, chain.NodeID(nodePrivateKey.PubKey()))
+			sentryNodeIDs = append(sentryNodeIDs, nodeConfig.PeerID)
 		}
 
-		idsJSON := bytesOrPanic(json.Marshal(nodeIDs))
-		orPanic(os.WriteFile(dir+"/sentry-nodes/ids.json", idsJSON, 0o600))
+		idsJSON := bytesOrPanic(json.Marshal(sentryNodeIDs))
+		orPanic(os.WriteFile(rootOutDir+"/sentry-nodes/ids.json", idsJSON, 0o600))
 	}
+
+	for i := 0; i < env.NumOfValidators; i++ {
+		nodeConfig := allNodeConfigs[i]
+		peerAddress := fmt.Sprintf("%s@%s:%d", validatorNodeIDs[i], nodeConfig.IPAddr.String(), nodeConfig.Ports.P2P)
+
+		nodeConfig.PersistentPeers = strings.Join(filterStringValue(persistentValidatorPeers, peerAddress), ",")
+		nodeConfig.PrivatePeerIds = strings.Join(validatorNodeIDs, ",")
+
+		allNodeConfigs[i] = nodeConfig
+
+		// save the node config again, for every validator
+		nodeConfig.Save(filepath.Join(rootOutDir, nodeConfig.Home))
+	}
+
+	chain.GenerateDockerCompose(
+		env.ChainID,
+		env.DockerImage,
+		env.DockerSubnet,
+		allNodeConfigs,
+		rootOutDir,
+		env.Debug,
+	)
+}
+
+func filterStringValue(list []string, filter string) []string {
+	newList := make([]string, 0, len(list))
+	for _, v := range list {
+		if v != filter {
+			newList = append(newList, v)
+		}
+	}
+
+	return newList
+}
+
+func ipInSubnet(subnet string, offset int) net.IP {
+	_, ipNet, err := net.ParseCIDR(subnet)
+	if err != nil {
+		panic(err)
+	}
+
+	// Get the first IP in subnet
+	ip := ipNet.IP.To4()
+	if ip == nil {
+		panic("only IPv4 subnets supported")
+	}
+
+	// Add offset to last octet
+	ip[3] += byte(offset + 1) // +1 because we want to start from the second IP in the subnet (not gateway)
+
+	return ip
+}
+
+func makeIntRange(start, end int) []int {
+	r := make([]int, end-start)
+	for i := range r {
+		r[i] = start + i
+	}
+
+	return r
 }

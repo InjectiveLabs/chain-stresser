@@ -91,7 +91,7 @@ filter_peers = false
 [rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "tcp://127.0.0.1:26657"
+laddr = "tcp://{{.IPListen}}:26657"
 
 # A list of origins a cross-domain request can be executed from
 # Default value '[]' disables cors support
@@ -253,7 +253,7 @@ enabled = false
 [p2p]
 
 # Address to listen for incoming connections
-laddr = "tcp://0.0.0.0:26656"
+laddr = "tcp://{{.IPListen}}:26656"
 
 # Address to advertise to peers for them to dial. If empty, will use the same
 # port as the laddr, and will introspect on the listener to figure out the
@@ -264,7 +264,7 @@ external_address = ""
 seeds = ""
 
 # Comma separated list of nodes to keep persistent connections to
-persistent_peers = ""
+persistent_peers = "{{.PersistentPeers}}"
 
 # Path to address book
 addr_book_file = "config/addrbook.json"
@@ -307,7 +307,7 @@ pex = true
 seed_mode = false
 
 # Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
-private_peer_ids = ""
+private_peer_ids = "{{.PrivatePeerIds}}"
 
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = false
@@ -597,7 +597,7 @@ psql-conn = ""
 prometheus = false
 
 # Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = ":26660"
+prometheus_listen_addr = "{{.IPListen}}:26660"
 
 # Maximum number of simultaneous connections.
 # If you want to accept a larger number than the default, make sure

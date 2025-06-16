@@ -29,6 +29,12 @@ const (
 	defaultNumOfValidators = 1
 	defaultNumOfSentries   = 0
 	defaultNumOfInstances  = 1
+
+	defaultInjectiveDockerImage = "injectivelabs/injective-core"
+	defaultDockerSubnet         = "172.127.0.0/24"
+
+	// TODO: update to latest version when it's released
+	latestInjectiveCoreTag = "v1.16.0-beta.3"
 )
 
 var (
@@ -73,8 +79,8 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&stressCfg.ChainID, "chain-id", defaultChainID, "Expected Cosmos chain ID of the chain to connect to.")
 	rootCmd.PersistentFlags().Int64Var(&stressCfg.EthChainID, "eth-chain-id", defaultEthChainID, "Expected EIP-155 chain ID of the EVM.")
 	rootCmd.PersistentFlags().StringVar(&stressCfg.MinGasPrice, "min-gas-price", defaultMinGasPrice, "Minimum gas price to pay for each transaction.")
-	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "localhost:26657", "Address of a injectived node RPC to connect to.")
-	rootCmd.PersistentFlags().StringVar(&stressCfg.GRPCAddress, "grpc-addr", "localhost:9900", "Address of a injectived node GRPC to connect to.")
+	rootCmd.PersistentFlags().StringVar(&stressCfg.NodeAddress, "node-addr", "127.0.0.1:26657", "Address of a injectived node RPC to connect to.")
+	rootCmd.PersistentFlags().StringVar(&stressCfg.GRPCAddress, "grpc-addr", "127.0.0.1:9900", "Address of a injectived node GRPC to connect to.")
 	rootCmd.PersistentFlags().BoolVar(&stressCfg.AwaitTxConfirmation, "await", true, "Await for transaction to be included in a block.")
 	rootCmd.PersistentFlags().BoolVar(&verboseOutput, "verbose", false, "Verbosely output debugging information.")
 	rootCmd.PersistentFlags().StringVar(&accountFile, "accounts", "accounts.json", "Path to a JSON file containing private keys of accounts to use for stress testing.")
@@ -101,8 +107,11 @@ func main() {
 
 	generateCmd.Flags().StringVar(&genEnv.ChainID, "chain-id", defaultChainID, "Cosmos chain ID of the chain to generate.")
 	generateCmd.Flags().IntVar(&genEnv.EthChainID, "eth-chain-id", defaultEthChainID, "EIP-155 chain ID of the EVM (can be different from the Cosmos chain-id).")
-	generateCmd.Flags().BoolVar(&genEnv.EvmEnabled, "evm", false, "Enabled EVM support. Generates genesis with EVM state.")
+	generateCmd.Flags().BoolVar(&genEnv.EvmEnabled, "evm", true, "Enabled EVM support. Generates genesis with EVM state.")
 	generateCmd.Flags().BoolVar(&genEnv.ProdLike, "prod", false, "Generate config for prod-like chain (app/bft configs will be close to mainnet versions).")
+	generateCmd.Flags().BoolVar(&genEnv.Debug, "debug", false, "Additional debug output when running in Docker Compose mode.")
+	generateCmd.Flags().StringVar(&genEnv.DockerImage, "docker-image", defaultInjectiveDockerImage+":"+latestInjectiveCoreTag, "Docker image to use for the local network via docker-compose.")
+	generateCmd.Flags().StringVar(&genEnv.DockerSubnet, "docker-subnet", defaultDockerSubnet, "Docker subnet to use for the local network via docker-compose.")
 	generateCmd.Flags().IntVar(&genEnv.NumOfValidators, "validators", defaultNumOfValidators, "Number of validators to generate config for.")
 	generateCmd.Flags().IntVar(&genEnv.NumOfSentryNodes, "sentries", defaultNumOfSentries, "Number of sentry nodes to generate config for.")
 	generateCmd.Flags().IntVar(&genEnv.NumOfInstances, "instances", defaultNumOfInstances, "The maximum number of parallel chain-stresser instances to be prepared for.")
@@ -317,7 +326,7 @@ func main() {
 		},
 	}
 
-	txEthUserOpCmd.Flags().StringVar(&ethRPCURL, "eth-rpc-url", "http://localhost:8545", "Ethereum RPC URL")
+	txEthUserOpCmd.Flags().StringVar(&ethRPCURL, "eth-rpc-url", "http://127.0.0.1:8545", "Ethereum RPC URL")
 	txEthUserOpCmd.Flags().StringVar(&entrypointAddress, "entrypoint-address", "0x586AaA4d77955b36784cADf6D9D617b952d45DA1", "EntryPoint contract address")
 	txEthUserOpCmd.Flags().StringVar(&beneficiaryAddress, "beneficiary-address", "0x0000000000000000000000000000000000000000", "Beneficiary address for UserOp fees")
 	txEthUserOpCmd.Flags().StringVar(&accountFactoryAddress, "factory-address", "0x0B3809304F2bAad3E0d0810B98Cc7e505C06ce89", "Account Factory contract address")

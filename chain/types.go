@@ -9,12 +9,13 @@ import (
 type Ports struct {
 	RPC        int `json:"rpc"`
 	P2P        int `json:"p2p"`
+	API        int `json:"api"`
 	GRPC       int `json:"grpc"`
 	GRPCWeb    int `json:"grpcWeb"`
 	PProf      int `json:"pprof"`
 	Prometheus int `json:"prometheus"`
-
-	// TODO: EVM RPC port
+	EVMRPC     int `json:"evmRpc"`
+	EVMWSPort  int `json:"evmWsPort"`
 }
 
 type Account struct {

@@ -2,6 +2,7 @@ package chain
 
 import (
 	"bytes"
+	"net"
 	"os"
 	"text/template"
 
@@ -12,6 +13,9 @@ type AppConfig struct {
 	MinimumGasPrices string
 	EVMEnabled       bool
 	ProdLike         bool
+
+	IPListen     net.IP
+	PortsExposed bool
 }
 
 func (appConfig *AppConfig) Save(homeDir string) {

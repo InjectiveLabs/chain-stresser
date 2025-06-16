@@ -24,14 +24,24 @@ const (
 )
 
 type NodeConfig struct {
+	Home                 string
 	Moniker              string
-	IP                   net.IP
-	PrometheusPort       int
+	PeerID               string
+	IPListen             net.IP
+	IPAddr               net.IP
+	Ports                Ports
+	PersistentPeers      string
+	PrivatePeerIds       string
 	NodeKey              crypto.PrivKey
 	ValidatorKey         crypto.PrivKey
 	TxIndexer            TxIndexerKind
 	DiscardABCIResponses bool
 	ProdLike             bool
+	PortsExposed         bool
+
+	// DependsOn only used for docker-compose
+	// Is a list of validator indices that this node depends on.
+	DependsOn []int
 }
 
 func (nodeConfig *NodeConfig) Save(homeDir string) {
@@ -66,13 +76,31 @@ func (nodeConfig *NodeConfig) Save(homeDir string) {
 	cfg.P2P.AllowDuplicateIP = true
 	cfg.P2P.MaxNumOutboundPeers = 100
 	cfg.P2P.MaxNumInboundPeers = 100
+	cfg.P2P.PersistentPeers = nodeConfig.PersistentPeers
+	cfg.P2P.PrivatePeerIDs = nodeConfig.PrivatePeerIds
 	cfg.RPC.MaxSubscriptionClients = 10000
 	cfg.RPC.MaxOpenConnections = 10000
 	cfg.RPC.MaxSubscriptionsPerClient = 10000
 	cfg.Mempool.Size = 50000
-	cfg.Mempool.MaxTxsBytes = 671088640
-	cfg.Instrumentation.Prometheus = true
-	cfg.Instrumentation.PrometheusListenAddr = net.JoinHostPort(nodeConfig.IP.String(), strconv.Itoa(nodeConfig.PrometheusPort))
+  cfg.Mempool.MaxTxsBytes = 671088640
+
+	if nodeConfig.PortsExposed {
+		cfg.P2P.ListenAddress = "tcp://" + net.JoinHostPort(
+			nodeConfig.IPListen.String(),
+			strconv.Itoa(nodeConfig.Ports.P2P),
+		)
+		cfg.RPC.ListenAddress = "tcp://" + net.JoinHostPort(
+			nodeConfig.IPListen.String(),
+			strconv.Itoa(nodeConfig.Ports.RPC),
+		)
+
+		cfg.Instrumentation.Prometheus = true
+		cfg.Instrumentation.PrometheusListenAddr = net.JoinHostPort(
+			nodeConfig.IPListen.String(),
+			strconv.Itoa(nodeConfig.Ports.Prometheus),
+		)
+	}
+
 	cfg.Moniker = nodeConfig.Moniker
 	cfg.TxIndex.Indexer = string(TxIndexerKV)
 	cfg.Storage.DiscardABCIResponses = false

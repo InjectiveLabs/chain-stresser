@@ -18,11 +18,23 @@ solidity:
 gen-0:
 	chain-stresser generate --accounts-num 1000 --validators 1 --sentries 0 --instances 1 --evm true
 
+gen-4:
+	chain-stresser generate --accounts-num 1000 --validators 4 --sentries 0 --instances 1 --evm true
+
+gen-4-2:
+	chain-stresser generate --accounts-num 1000 --validators 4 --sentries 2 --instances 1 --evm true
+
 val-0-start:
 	injectived --home="./chain-stresser-deploy/validators/0" start
 
 val-0-clean:
 	injectived --home="./chain-stresser-deploy/validators/0" tendermint unsafe-reset-all
+
+compose-up:
+	docker compose -f chain-stresser-deploy/docker-compose.yml up -d
+
+compose-down:
+	docker compose -f chain-stresser-deploy/docker-compose.yml down
 
 run-bank-send:
 	chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
