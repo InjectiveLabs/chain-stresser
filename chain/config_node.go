@@ -82,6 +82,7 @@ func (nodeConfig *NodeConfig) Save(homeDir string) {
 	cfg.RPC.MaxOpenConnections = 10000
 	cfg.RPC.MaxSubscriptionsPerClient = 10000
 	cfg.Mempool.Size = 50000
+  cfg.Mempool.MaxTxsBytes = 671088640
 
 	if nodeConfig.PortsExposed {
 		cfg.P2P.ListenAddress = "tcp://" + net.JoinHostPort(

@@ -54,6 +54,18 @@ run-eth-internal-call:
 run-eth-userop:
 	chain-stresser tx-eth-userop --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 10
 
+run-exchange-batch-orders:
+	chain-stresser tx-exchange-batch-orders --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000 --spot-market-ids 0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9 --derivative-market-ids 0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9
+
+run-wasm-store-code:
+	chain-stresser tx-wasm-store-code --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
+
+run-wasm-init-contract:
+	chain-stresser tx-wasm-init-contract --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
+
+run-wasm-exec-contract:
+	chain-stresser tx-wasm-exec-contract --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
+
 args = $(foreach a,$($(subst _,-,$1)_args),$(if $(value $a),"$($a)"))
 eth-counter-get_args = contract
 

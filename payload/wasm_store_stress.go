@@ -14,18 +14,18 @@ import (
 var (
 	//go:embed wasm/cw20_base.wasm
 	cw20ByteCode []byte
-	_            TxProvider = &wasmDeployProvider{}
+	_            TxProvider = &wasmStoreCodeProvider{}
 )
 
-type wasmDeployProvider struct {
+type wasmStoreCodeProvider struct {
 	minGasPrice sdk.Coin
 	maxGasLimit uint64
 	memoAttach  string
 }
 
-// NewWasmDeployProvider creates transaction factory for stress testing
-// wasm contract deployment.
-func NewWasmDeployProvider(
+// NewWasmStoreCodeProvider creates transaction factory for stress testing
+// wasm contract code storement.
+func NewWasmStoreCodeProvider(
 	minGasPrice string,
 ) (TxProvider, error) {
 
@@ -35,7 +35,7 @@ func NewWasmDeployProvider(
 		return nil, err
 	}
 
-	provider := &wasmDeployProvider{
+	provider := &wasmStoreCodeProvider{
 		minGasPrice: parsedMinGasPrice,
 		maxGasLimit: defaultMaxGasLimit,
 	}
@@ -43,15 +43,15 @@ func NewWasmDeployProvider(
 	return provider, nil
 }
 
-type wasmDeployTx struct {
+type wasmStoreCodeTx struct {
 	baseTx
 }
 
-func (p *wasmDeployProvider) Name() string {
-	return "deploy_contract_stress"
+func (p *wasmStoreCodeProvider) Name() string {
+	return "wasm_store_code_stress"
 }
 
-func (p *wasmDeployProvider) GenerateTx(
+func (p *wasmStoreCodeProvider) GenerateTx(
 	req TxRequest,
 ) (Tx, error) {
 	sender := req.From.Key.AccAddress()
@@ -60,7 +60,7 @@ func (p *wasmDeployProvider) GenerateTx(
 		WASMByteCode: cw20ByteCode,
 	}
 
-	tx := &wasmDeployTx{
+	tx := &wasmStoreCodeTx{
 		baseTx: baseTx{
 			from:    req.From,
 			msgs:    []sdk.Msg{msg},
@@ -72,7 +72,7 @@ func (p *wasmDeployProvider) GenerateTx(
 	return tx, nil
 }
 
-func (p *wasmDeployProvider) BuildAndSignTx(
+func (p *wasmStoreCodeProvider) BuildAndSignTx(
 	client chain.Client,
 	unsignedTx Tx,
 ) (signedTx Tx, err error) {
@@ -98,8 +98,10 @@ func (p *wasmDeployProvider) BuildAndSignTx(
 	return tx, nil
 }
 
-func (p *wasmDeployProvider) GenerateInitialTx(
+func (p *wasmStoreCodeProvider) GenerateInitialTx(
 	req TxRequest,
 ) (Tx, error) {
+	// Not implemented, because wasm code store doesn't require any prior state on the chain
+
 	return nil, nil
 }
