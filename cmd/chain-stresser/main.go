@@ -354,33 +354,8 @@ func main() {
 	txExchangeBatchOrdersCmd.Flags().StringSliceVar(&derivativeMarketIDs, "derivative-market-ids", []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}, "Comma-separated list of derivative market IDs to update.")
 	rootCmd.AddCommand(txExchangeBatchOrdersCmd)
 
-	txExecContractCmd := &cobra.Command{
-		Use:   "tx-exec-wasm-contract",
-		Short: "Run stresstest with x/wasm.MsgExecuteContract transactions.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if verboseOutput {
-				log.DefaultLogger.SetLevel(log.DebugLevel)
-			}
-
-			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
-
-			execContractProvider, err := payload.NewWasmExecProvider(stressCfg.MinGasPrice)
-			if err != nil {
-				return errors.Wrap(err, "failed to initiate wasm exec stress provider")
-			}
-
-			if err := stresser.Stress(rootCtx, stressCfg, execContractProvider); err != nil {
-				log.Errorf("❌ benchmark failed:\n\n%s", err)
-				os.Exit(-1)
-			}
-
-			return nil
-		},
-	}
-	rootCmd.AddCommand(txExecContractCmd)
-
-	txWasmDeployContractCmd := &cobra.Command{
-		Use:   "tx-deploy-wasm-contract",
+	txWasmStoreCodeCmd := &cobra.Command{
+		Use:   "tx-wasm-store-code",
 		Short: "Run stresstest with x/wasm.MsgStoreCode transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if verboseOutput {
@@ -389,12 +364,12 @@ func main() {
 
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
-			deployContractProvider, err := payload.NewWasmDeployProvider(stressCfg.MinGasPrice)
+			wasmStoreCodeProvider, err := payload.NewWasmStoreCodeProvider(stressCfg.MinGasPrice)
 			if err != nil {
-				return errors.Wrap(err, "failed to initiate wasm deploy contract stress provider")
+				return errors.Wrap(err, "failed to initiate wasm code store stress provider")
 			}
 
-			if err := stresser.Stress(rootCtx, stressCfg, deployContractProvider); err != nil {
+			if err := stresser.Stress(rootCtx, stressCfg, wasmStoreCodeProvider); err != nil {
 				log.Errorf("❌ benchmark failed:\n\n%s", err)
 				os.Exit(-1)
 			}
@@ -402,10 +377,10 @@ func main() {
 			return nil
 		},
 	}
-	rootCmd.AddCommand(txWasmDeployContractCmd)
+	rootCmd.AddCommand(txWasmStoreCodeCmd)
 
 	txWasmInitContractCmd := &cobra.Command{
-		Use:   "tx-init-wasm-contract",
+		Use:   "tx-wasm-init-contract",
 		Short: "Run stresstest with x/wasm.MsgInstantiateContract transactions.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if verboseOutput {
@@ -414,12 +389,21 @@ func main() {
 
 			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
-			initContractProvider, err := payload.NewWasmInitProvider(stressCfg.MinGasPrice)
+			queryClient := chain.NewClient(
+				stressCfg.ChainID,
+				stressCfg.NodeAddress,
+				stressCfg.GRPCAddress,
+			)
+
+			wasmInitContractProvider, err := payload.NewWasmInitContractProvider(
+				queryClient,
+				stressCfg.MinGasPrice,
+			)
 			if err != nil {
 				return errors.Wrap(err, "failed to initiate wasm init contract stress provider")
 			}
 
-			if err := stresser.Stress(rootCtx, stressCfg, initContractProvider); err != nil {
+			if err := stresser.Stress(rootCtx, stressCfg, wasmInitContractProvider); err != nil {
 				log.Errorf("❌ benchmark failed:\n\n%s", err)
 				os.Exit(-1)
 			}
@@ -428,6 +412,40 @@ func main() {
 		},
 	}
 	rootCmd.AddCommand(txWasmInitContractCmd)
+
+	txWasmExecContractCmd := &cobra.Command{
+		Use:   "tx-wasm-exec-contract",
+		Short: "Run stresstest with x/wasm.MsgExecuteContract transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			queryClient := chain.NewClient(
+				stressCfg.ChainID,
+				stressCfg.NodeAddress,
+				stressCfg.GRPCAddress,
+			)
+
+			wasmExecContractProvider, err := payload.NewWasmExecContractProvider(
+				queryClient,
+				stressCfg.MinGasPrice,
+			)
+			if err != nil {
+				return errors.Wrap(err, "failed to initiate wasm exec stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, wasmExecContractProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txWasmExecContractCmd)
 
 	orPanic(rootCmd.Execute())
 }
