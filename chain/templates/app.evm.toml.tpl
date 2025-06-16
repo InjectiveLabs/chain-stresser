@@ -133,7 +133,7 @@ enable = true
 swagger = true
 
 # Address defines the API server to listen on.
-address = "tcp://0.0.0.0:10337"
+address = "tcp://{{.IPListen}}:10337"
 
 # MaxOpenConnections defines the number of maximum open connections.
 max-open-connections = 1000
@@ -160,7 +160,7 @@ enabled-unsafe-cors = true
 enable = true
 
 # Address defines the gRPC server address to bind to.
-address = "0.0.0.0:9900"
+address = "{{.IPListen}}:9900"
 
 # MaxRecvMsgSize defines the max message size in bytes the server can receive.
 # The default value is 10MB.
@@ -205,10 +205,10 @@ max-tx-gas-wanted = 0
 enable = true
 
 # Address defines the EVM RPC HTTP server address to bind to.
-address = "0.0.0.0:8545"
+address = "{{.IPListen}}:8545"
 
 # Address defines the EVM WebSocket server address to bind to.
-ws-address = "0.0.0.0:8546"
+ws-address = "{{.IPListen}}:8546"
 
 # API defines a list of JSON-RPC namespaces that should be enabled
 # Example: "eth,txpool,personal,net,debug,web3"

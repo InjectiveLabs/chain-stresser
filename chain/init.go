@@ -13,12 +13,13 @@ func init() {
 var DefaultPorts = Ports{
 	RPC:        26657,
 	P2P:        26656,
+	API:        10337,
 	GRPC:       9090,
 	GRPCWeb:    9091,
 	PProf:      6060,
 	Prometheus: 26660,
-
-	// TODO: EVM RPC
+	EVMRPC:     8545,
+	EVMWSPort:  8546,
 }
 
 func setAccountPrefixes(accountAddressPrefix string) {
