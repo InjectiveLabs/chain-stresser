@@ -16,7 +16,7 @@ version = "1.0.1"
 
 # TCP or UNIX socket address of the ABCI application,
 # or the name of an ABCI application compiled in with the CometBFT binary
-proxy_app = "tcp://127.0.0.1:26658"
+proxy_app = "tcp://127.0.0.1:{{.Ports.ProxyApp}}"
 
 # A custom human readable name for this node
 moniker = "{{.Moniker}}"
@@ -91,7 +91,7 @@ filter_peers = false
 [rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "tcp://{{.IPListen}}:26657"
+laddr = "tcp://{{.IPListen}}:{{.Ports.RPC}}"
 
 # A list of origins a cross-domain request can be executed from
 # Default value '[]' disables cors support
@@ -185,7 +185,7 @@ tls_cert_file = ""
 tls_key_file = ""
 
 # pprof listen address (https://golang.org/pkg/net/http/pprof)
-pprof_laddr = "localhost:6060"
+pprof_laddr = "{{.IPListen}}:{{.Ports.PProf}}"
 
 #######################################################
 ###       gRPC Server Configuration Options         ###
@@ -253,7 +253,7 @@ enabled = false
 [p2p]
 
 # Address to listen for incoming connections
-laddr = "tcp://{{.IPListen}}:26656"
+laddr = "tcp://{{.IPListen}}:{{.Ports.P2P}}"
 
 # Address to advertise to peers for them to dial. If empty, will use the same
 # port as the laddr, and will introspect on the listener to figure out the
@@ -597,7 +597,7 @@ psql-conn = ""
 prometheus = false
 
 # Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = "{{.IPListen}}:26660"
+prometheus_listen_addr = "{{.IPListen}}:{{.Ports.Prometheus}}"
 
 # Maximum number of simultaneous connections.
 # If you want to accept a larger number than the default, make sure

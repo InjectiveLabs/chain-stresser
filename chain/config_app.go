@@ -15,6 +15,7 @@ type AppConfig struct {
 	ProdLike         bool
 
 	IPListen     net.IP
+	Ports        Ports
 	PortsExposed bool
 }
 
