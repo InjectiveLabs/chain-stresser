@@ -16,7 +16,8 @@ services:
     ports:
       - "{{$node.Ports.P2P}}-{{$node.Ports.RPC}}:26656-26657"
       - "{{$node.Ports.API}}:10337"
-      - "{{$node.Ports.GRPC}}-{{$node.Ports.GRPCWeb}}:9090-9091"
+      - "{{$node.Ports.GRPC}}:9900"
+      - "{{$node.Ports.GRPCWeb}}:9091"
       - "{{$node.Ports.PProf}}:2345"
       {{- if $node.Ports.EVMRPC}}
       - "{{$node.Ports.EVMRPC}}-{{$node.Ports.EVMWSPort}}:8545-8546"

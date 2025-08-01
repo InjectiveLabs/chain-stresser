@@ -14,7 +14,7 @@ var DefaultPorts = Ports{
 	RPC:        26657,
 	P2P:        26656,
 	API:        10337,
-	GRPC:       9090,
+	GRPC:       9900,
 	GRPCWeb:    9091,
 	PProf:      6060,
 	Prometheus: 26660,
