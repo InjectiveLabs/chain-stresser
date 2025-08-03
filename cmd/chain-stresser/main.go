@@ -100,6 +100,15 @@ func main() {
 				log.DefaultLogger.SetLevel(log.DebugLevel)
 			}
 
+			if genEnv.LocalNative {
+				if genEnv.NumOfValidators > 4 {
+					return errors.New("number of validators must be less than or equal to 4 when running natively")
+				}
+				if genEnv.NumOfSentryNodes > 0 {
+					return errors.New("number of sentry nodes must be 0 when running natively")
+				}
+			}
+
 			stresser.GenerateConfigs(genEnv)
 			return nil
 		},
@@ -115,6 +124,7 @@ func main() {
 	generateCmd.Flags().IntVar(&genEnv.NumOfValidators, "validators", defaultNumOfValidators, "Number of validators to generate config for.")
 	generateCmd.Flags().IntVar(&genEnv.NumOfSentryNodes, "sentries", defaultNumOfSentries, "Number of sentry nodes to generate config for.")
 	generateCmd.Flags().IntVar(&genEnv.NumOfInstances, "instances", defaultNumOfInstances, "The maximum number of parallel chain-stresser instances to be prepared for.")
+	generateCmd.Flags().BoolVar(&genEnv.LocalNative, "native", false, "Generate config compatible with running multiple binaries natively on the host machine (no docker-compose).")
 	generateCmd.Flags().IntVar(&genEnv.NumOfAccountsPerInstance, "accounts-num", defaultNumOfAccounts, "Number of funded accounts to generate for each instance.")
 	generateCmd.Flags().StringVar(&genEnv.OutDirectory, "out", strOrPanic(os.Getwd()), "Path to the directory where generated files are stored.")
 	rootCmd.AddCommand(generateCmd)

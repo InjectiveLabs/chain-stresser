@@ -107,7 +107,7 @@ enable = true
 swagger = true
 
 # Address defines the API server to listen on.
-address = "tcp://{{.IPListen}}:10337"
+address = "tcp://{{.IPListen}}:{{.Ports.API}}"
 
 # MaxOpenConnections defines the number of maximum open connections.
 max-open-connections = 1000
@@ -134,7 +134,7 @@ enabled-unsafe-cors = false
 enable = true
 
 # Address defines the gRPC server address to bind to.
-address = "{{.IPListen}}:9900"
+address = "{{.IPListen}}:{{.Ports.GRPC}}"
 
 [grpc-web]
 
@@ -142,7 +142,7 @@ address = "{{.IPListen}}:9900"
 enable = true
 
 # Address defines the gRPC Web server address to bind to.
-address = "{{.IPListen}}:9091"
+address = "{{.IPListen}}:{{.Ports.GRPCWeb}}"
 
 ###############################################################################
 ###                        State Sync Configuration                         ###

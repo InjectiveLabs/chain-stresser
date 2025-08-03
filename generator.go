@@ -26,6 +26,7 @@ type GeneratorEnvironment struct {
 	OutDirectory             string
 	ProdLike                 bool
 	Debug                    bool
+	LocalNative              bool
 }
 
 const (
@@ -85,13 +86,23 @@ func GenerateConfigs(
 			txIndexerKind = chain.TxIndexerDisabled
 		}
 
+		nodeIPAddr := net.IPv4(127, 0, 0, 1)
+		if !env.LocalNative {
+			nodeIPAddr = ipInSubnet(env.DockerSubnet, i+1)
+		}
+
+		nodePorts := chain.DefaultPorts
+		if env.LocalNative {
+			nodePorts = shiftPorts(nodePorts, i)
+		}
+
 		nodeConfig := &chain.NodeConfig{
 			Home:                 fmt.Sprintf("./%s", relativeNodeDir),
 			Moniker:              fmt.Sprintf("validator-%d", i),
 			PeerID:               chain.NodeID(nodePrivateKey.PubKey()),
 			IPListen:             net.IPv4zero,
-			IPAddr:               ipInSubnet(env.DockerSubnet, i+1),
-			Ports:                chain.DefaultPorts,
+			IPAddr:               nodeIPAddr,
+			Ports:                nodePorts,
 			NodeKey:              nodePrivateKey,
 			ValidatorKey:         validatorPrivateKey,
 			ProdLike:             env.ProdLike,
@@ -112,6 +123,7 @@ func GenerateConfigs(
 			EVMEnabled:       env.EvmEnabled,
 			ProdLike:         env.ProdLike,
 			IPListen:         net.IPv4zero,
+			Ports:            nodePorts,
 			PortsExposed:     env.NumOfSentryNodes == 0 && i == 0, // expose ports only for the first validator (and no sentry nodes)
 		}
 		appConfig.Save(valDir)
@@ -171,6 +183,7 @@ func GenerateConfigs(
 				EVMEnabled:       env.EvmEnabled,
 				ProdLike:         env.ProdLike,
 				IPListen:         net.IPv4zero,
+				Ports:            chain.DefaultPorts,
 				PortsExposed:     i == 0, // expose ports only for the first sentry node
 			}
 
@@ -198,14 +211,16 @@ func GenerateConfigs(
 		nodeConfig.Save(filepath.Join(rootOutDir, nodeConfig.Home))
 	}
 
-	chain.GenerateDockerCompose(
-		env.ChainID,
-		env.DockerImage,
-		env.DockerSubnet,
-		allNodeConfigs,
-		rootOutDir,
-		env.Debug,
-	)
+	if !env.LocalNative {
+		chain.GenerateDockerCompose(
+			env.ChainID,
+			env.DockerImage,
+			env.DockerSubnet,
+			allNodeConfigs,
+			rootOutDir,
+			env.Debug,
+		)
+	}
 }
 
 func filterStringValue(list []string, filter string) []string {
@@ -235,6 +250,24 @@ func ipInSubnet(subnet string, offset int) net.IP {
 	ip[3] += byte(offset + 1) // +1 because we want to start from the second IP in the subnet (not gateway)
 
 	return ip
+}
+
+func shiftPorts(ports chain.Ports, offset int) chain.Ports {
+	// digitOffset is 100 then 26657 -> 26757 -> 26857 -> 26957
+	const digitOffset = 100
+
+	return chain.Ports{
+		RPC:        ports.RPC + digitOffset*offset,
+		P2P:        ports.P2P + digitOffset*offset,
+		API:        ports.API + digitOffset*offset,
+		GRPC:       ports.GRPC + digitOffset*offset,
+		GRPCWeb:    ports.GRPCWeb + digitOffset*offset,
+		PProf:      ports.PProf + digitOffset*offset,
+		Prometheus: ports.Prometheus + digitOffset*offset,
+		EVMRPC:     ports.EVMRPC + digitOffset*offset,
+		EVMWSPort:  ports.EVMWSPort + digitOffset*offset,
+		ProxyApp:   ports.ProxyApp + digitOffset*offset,
+	}
 }
 
 func makeIntRange(start, end int) []int {

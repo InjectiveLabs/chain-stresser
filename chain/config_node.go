@@ -82,18 +82,19 @@ func (nodeConfig *NodeConfig) Save(homeDir string) {
 	cfg.RPC.MaxOpenConnections = 10000
 	cfg.RPC.MaxSubscriptionsPerClient = 10000
 	cfg.Mempool.Size = 50000
-  cfg.Mempool.MaxTxsBytes = 671088640
+	cfg.Mempool.MaxTxsBytes = 671088640
+
+	cfg.P2P.ListenAddress = "tcp://" + net.JoinHostPort(
+		nodeConfig.IPListen.String(),
+		strconv.Itoa(nodeConfig.Ports.P2P),
+	)
+
+	cfg.RPC.ListenAddress = "tcp://" + net.JoinHostPort(
+		nodeConfig.IPListen.String(),
+		strconv.Itoa(nodeConfig.Ports.RPC),
+	)
 
 	if nodeConfig.PortsExposed {
-		cfg.P2P.ListenAddress = "tcp://" + net.JoinHostPort(
-			nodeConfig.IPListen.String(),
-			strconv.Itoa(nodeConfig.Ports.P2P),
-		)
-		cfg.RPC.ListenAddress = "tcp://" + net.JoinHostPort(
-			nodeConfig.IPListen.String(),
-			strconv.Itoa(nodeConfig.Ports.RPC),
-		)
-
 		cfg.Instrumentation.Prometheus = true
 		cfg.Instrumentation.PrometheusListenAddr = net.JoinHostPort(
 			nodeConfig.IPListen.String(),

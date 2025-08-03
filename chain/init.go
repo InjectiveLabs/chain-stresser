@@ -20,6 +20,7 @@ var DefaultPorts = Ports{
 	Prometheus: 26660,
 	EVMRPC:     8545,
 	EVMWSPort:  8546,
+	ProxyApp:   26658,
 }
 
 func setAccountPrefixes(accountAddressPrefix string) {

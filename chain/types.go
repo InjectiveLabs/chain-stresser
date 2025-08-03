@@ -16,6 +16,7 @@ type Ports struct {
 	Prometheus int `json:"prometheus"`
 	EVMRPC     int `json:"evmRpc"`
 	EVMWSPort  int `json:"evmWsPort"`
+	ProxyApp   int `json:"proxyApp"`
 }
 
 type Account struct {
