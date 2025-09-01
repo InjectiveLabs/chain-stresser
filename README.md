@@ -70,6 +70,9 @@ etherman -N Counter -S ./eth/solidity/Counter.sol call 0x000... getCount
 
 See `etherman --help` for more info.
 
+## State Replay Feature 
+State replay enables stress testing by replaying real network transactions. Checkout [usage guide](state/README.md).
+
 ## License
 
 [Apache-2.0](/LICENSE)
