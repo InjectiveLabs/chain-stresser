@@ -1,6 +1,12 @@
 # State Replay
 
-State replay enables stress testing with real network transactions. First, clone a network's state locally using `injectived bootstrap-devnet`. Then use the built-in sniffer to capture live transactions from the original network and replay them on your local devnetified chain, where they haven't been executed yet.
+## Overview
+
+State replay enables stress testing with real network transactions, ported from [chilliass](https://github.com/InjectiveLabs/chilliass). 
+
+Since chain-stresser operates differently than chilliass, it's not possible to sniff and broadcast transactions in parallel without refactoring (planned for future features). This version works in two phases: **first sniff blocks** to capture transactions, **then replay** the captured transactions.
+
+**Workflow**: Clone a network's state locally using `injectived bootstrap-devnet`, then use the built-in sniffer to capture live transactions from the original network and replay them on your local devnetified chain where they haven't been executed yet.
 
 ## How It Works
 

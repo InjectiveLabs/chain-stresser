@@ -510,13 +510,11 @@ func main() {
 
 				snifferErrCh := make(chan error, 1)
 
-				go func() {
-					if err := sniffer.Start(); err != nil {
-						snifferErrCh <- err
-					} else {
-						close(snifferErrCh)
-					}
-				}()
+				if err := sniffer.Start(); err != nil {
+					snifferErrCh <- err
+				} else {
+					close(snifferErrCh)
+				}
 
 				log.Info("Waiting for state sniffer to complete...")
 
