@@ -472,14 +472,34 @@ func main() {
 		replayFilePath     string
 		snifferEnabled     bool
 		snifferRPC         string
-		snifferStartHeight int
-		snifferEndHeight   int
+		snifferStartHeight uint64
+		snifferEndHeight   uint64
 		snifferAppend      bool
 	)
 
 	txStateReplayCmd := &cobra.Command{
 		Use:   "tx-state-replay",
 		Short: "Run stresstest with state replay transactions.",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if snifferEnabled {
+				if snifferRPC == "" {
+					return errors.New("--sniffer-rpc is required when sniffer is enabled")
+				}
+				if snifferStartHeight == 0 {
+					return errors.New("--sniffer-start-height is required when sniffer is enabled")
+				}
+				if snifferEndHeight == 0 {
+					return errors.New("--sniffer-end-height is required when sniffer is enabled")
+				}
+				if replayFilePath == "" {
+					return errors.New("--replay-file-path is required when sniffer is enabled")
+				}
+				if snifferStartHeight >= snifferEndHeight {
+					return errors.New("--sniffer-start-height must be less than --sniffer-end-height")
+				}
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if verboseOutput {
 				log.DefaultLogger.SetLevel(log.DebugLevel)
@@ -528,7 +548,7 @@ func main() {
 					log.Info("State sniffer completed successfully, starting state replay stress test...")
 				}
 
-				defer sniffer.Close()
+				sniffer.Close()
 			}
 
 			stateReplayProvider, err := payload.NewStateReplayStressProvider(
@@ -548,12 +568,11 @@ func main() {
 		},
 	}
 	txStateReplayCmd.Flags().StringVar(&replayFilePath, "replay-file-path", "/tmp/chain-stresser/txns", "Path to the file containing the state replay transactions.")
-	txStateReplayCmd.Flags().BoolVar(&snifferEnabled, "sniffer-enabled", true, "Whether to enable the state sniffer.")
+	txStateReplayCmd.Flags().BoolVar(&snifferEnabled, "sniffer-enabled", false, "Whether to enable the state sniffer.")
 	txStateReplayCmd.Flags().StringVar(&snifferRPC, "sniffer-rpc", "http://127.0.0.1:26657", "RPC endpoint to use for the state sniffer.")
-	txStateReplayCmd.Flags().IntVar(&snifferStartHeight, "sniffer-start-height", 0, "Start height for the state sniffer.")
-	txStateReplayCmd.Flags().IntVar(&snifferEndHeight, "sniffer-end-height", 0, "End height for the state sniffer.")
+	txStateReplayCmd.Flags().Uint64Var(&snifferStartHeight, "sniffer-start-height", 0, "Start height for the state sniffer.")
+	txStateReplayCmd.Flags().Uint64Var(&snifferEndHeight, "sniffer-end-height", 0, "End height for the state sniffer.")
 	txStateReplayCmd.Flags().BoolVar(&snifferAppend, "sniffer-append", false, "Whether to append to the replay file.")
-	txStateReplayCmd.MarkFlagsRequiredTogether("sniffer-enabled", "sniffer-rpc", "sniffer-start-height", "sniffer-end-height", "replay-file-path")
 
 	rootCmd.AddCommand(txStateReplayCmd)
 

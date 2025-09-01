@@ -87,7 +87,7 @@ func (p *stateReplayStressProvider) GenerateTx(req TxRequest) (Tx, error) {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
 
-	for range MAX_RETRIES {
+	for i := 0; i < MAX_RETRIES; i++ {
 
 		lenBuf := make([]byte, LENGTH_HEADER_SIZE)
 		lenN, err := p.replayFile.Read(lenBuf)
@@ -137,7 +137,7 @@ func (p *stateReplayStressProvider) BuildAndSignTx(client chain.Client, unsigned
 }
 
 func (p *stateReplayStressProvider) openReplayFile(filePath string) error {
-	for i := range MAX_RETRIES {
+	for i := 0; i < MAX_RETRIES; i++ {
 		if stat, err := os.Stat(filePath); err == nil {
 			if stat.Size() >= LENGTH_HEADER_SIZE {
 				break
