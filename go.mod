@@ -5,6 +5,7 @@ go 1.23.8
 require (
 	cosmossdk.io/errors v1.0.1
 	cosmossdk.io/math v1.4.0
+	github.com/CosmWasm/wasmd v0.40.2
 	github.com/InjectiveLabs/sdk-go v1.58.0
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/cometbft/cometbft v1.0.1
@@ -20,6 +21,8 @@ require (
 	github.com/xlab/closer v1.1.0
 	github.com/xlab/pace v1.1.0
 	github.com/xlab/suplog v1.4.4
+	github.com/ybbus/jsonrpc/v3 v3.1.6
+	google.golang.org/grpc v1.71.0
 )
 
 require (
@@ -38,7 +41,6 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
-	github.com/CosmWasm/wasmd v0.40.2 // indirect
 	github.com/CosmWasm/wasmvm/v2 v2.1.5 // indirect
 	github.com/DataDog/appsec-internal-go v1.5.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.48.0 // indirect
@@ -227,7 +229,6 @@ require (
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287 // indirect
-	google.golang.org/grpc v1.71.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.62.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
