@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"math/big"
@@ -18,7 +17,7 @@ import (
 	stresser "github.com/InjectiveLabs/chain-stresser/v2"
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 	"github.com/InjectiveLabs/chain-stresser/v2/payload"
-	"github.com/InjectiveLabs/chain-stresser/v2/state"
+	"github.com/InjectiveLabs/chain-stresser/v2/replay"
 )
 
 const (
@@ -468,35 +467,21 @@ func main() {
 	}
 	rootCmd.AddCommand(txWasmExecContractCmd)
 
-	var (
-		replayFilePath     string
-		snifferEnabled     bool
-		snifferRPC         string
-		snifferStartHeight uint64
-		snifferEndHeight   uint64
-		snifferAppend      bool
-	)
+	var replayCfg replay.TxReplayConfig
 
-	txStateReplayCmd := &cobra.Command{
-		Use:   "tx-state-replay",
+	txnsReplayCmd := &cobra.Command{
+		Use:   "tx-replay",
 		Short: "Run stresstest with state replay transactions.",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if snifferEnabled {
-				if snifferRPC == "" {
-					return errors.New("--sniffer-rpc is required when sniffer is enabled")
-				}
-				if snifferStartHeight == 0 {
-					return errors.New("--sniffer-start-height is required when sniffer is enabled")
-				}
-				if snifferEndHeight == 0 {
-					return errors.New("--sniffer-end-height is required when sniffer is enabled")
-				}
-				if replayFilePath == "" {
-					return errors.New("--replay-file-path is required when sniffer is enabled")
-				}
-				if snifferStartHeight >= snifferEndHeight {
-					return errors.New("--sniffer-start-height must be less than --sniffer-end-height")
-				}
+			if replayCfg.CometRPC == "" {
+				return errors.New("--sniffer-rpc is required for remote sniffing.")
+			}
+			if replayCfg.StartHeight == 0 {
+				return errors.New("--sniffer-start-height is required for remote sniffing.")
+			}
+
+			if replayCfg.EndHeight > 0 && replayCfg.StartHeight >= replayCfg.EndHeight {
+				return errors.New("--sniffer-start-height must be less than --sniffer-end-height")
 			}
 			return nil
 		},
@@ -505,61 +490,44 @@ func main() {
 				log.DefaultLogger.SetLevel(log.DebugLevel)
 			}
 
-			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
-
 			queryClient := chain.NewClient(
 				stressCfg.ChainID,
 				stressCfg.NodeAddress,
 				stressCfg.GRPCAddress,
 			)
-			if snifferEnabled {
-				sharedBuf := &bytes.Buffer{}
-				sniffer, err := state.NewSniffer(
-					&state.StateConfig{
-						CometRPC:    snifferRPC,
-						StartHeight: snifferStartHeight,
-						EndHeight:   snifferEndHeight,
-						FilePath:    replayFilePath,
-						Append:      snifferAppend,
-					},
-					sharedBuf,
-				)
-				if err != nil {
-					return errors.Wrap(err, "failed to initiate state sniffer")
-				}
+			var txnsReplayProvider payload.TxProvider
 
-				snifferErrCh := make(chan error, 1)
-
-				if err := sniffer.Start(); err != nil {
-					snifferErrCh <- err
-				} else {
-					close(snifferErrCh)
-				}
-
-				log.Info("Waiting for state sniffer to complete...")
-
-				select {
-				case err := <-snifferErrCh:
-					if err != nil {
-						sniffer.Close()
-						return errors.Wrap(err, "state sniffer failed")
-					}
-				case <-sniffer.Done():
-					log.Info("State sniffer completed successfully, starting state replay stress test...")
-				}
-
-				sniffer.Close()
-			}
-
-			stateReplayProvider, err := payload.NewStateReplayStressProvider(
-				queryClient,
-				replayFilePath,
+			sniffer, err := replay.NewSniffer(
+				&replay.TxReplayConfig{
+					CometRPC:    replayCfg.CometRPC,
+					StartHeight: int64(replayCfg.StartHeight),
+					EndHeight:   replayCfg.EndHeight,
+				},
+				rootCtx,
 			)
 			if err != nil {
-				return errors.Wrap(err, "failed to initiate state replay stress provider")
+				return errors.Wrap(err, "failed to initiate txns sniffer")
+			}
+			defer sniffer.Close()
+			go func() {
+				sniffer.Start()
+			}()
+
+			txnsReplayProvider, err = payload.NewTxnsReplayStressProvider(
+				queryClient,
+				sniffer.Blocks(),
+				sniffer.Errors(),
+				sniffer.Done(),
+			)
+			if err != nil {
+				return errors.Wrap(err, "failed to initiate txns replay stress provider")
 			}
 
-			if err := stresser.Stress(rootCtx, stressCfg, stateReplayProvider); err != nil {
+			stressCfg.Mode = stresser.ModeRemote
+			// Explicitly set to false to avoid waiting for block confirmation, so we can replay faster (otherwise its 1TX per block)
+			stressCfg.AwaitTxConfirmation = false
+
+			if err := stresser.Stress(rootCtx, stressCfg, txnsReplayProvider); err != nil {
 				log.Errorf("❌ benchmark failed:\n\n%s", err)
 				os.Exit(-1)
 			}
@@ -567,14 +535,11 @@ func main() {
 			return nil
 		},
 	}
-	txStateReplayCmd.Flags().StringVar(&replayFilePath, "replay-file-path", "/tmp/chain-stresser/txns", "Path to the file containing the state replay transactions.")
-	txStateReplayCmd.Flags().BoolVar(&snifferEnabled, "sniffer-enabled", false, "Whether to enable the state sniffer.")
-	txStateReplayCmd.Flags().StringVar(&snifferRPC, "sniffer-rpc", "http://127.0.0.1:26657", "RPC endpoint to use for the state sniffer.")
-	txStateReplayCmd.Flags().Uint64Var(&snifferStartHeight, "sniffer-start-height", 0, "Start height for the state sniffer.")
-	txStateReplayCmd.Flags().Uint64Var(&snifferEndHeight, "sniffer-end-height", 0, "End height for the state sniffer.")
-	txStateReplayCmd.Flags().BoolVar(&snifferAppend, "sniffer-append", false, "Whether to append to the replay file.")
+	txnsReplayCmd.Flags().StringVar(&replayCfg.CometRPC, "sniffer-rpc", "http://127.0.0.1:26657", "RPC endpoint to use for the txns sniffer.")
+	txnsReplayCmd.Flags().Int64Var(&replayCfg.StartHeight, "sniffer-start-height", 0, "Start height for the txns sniffer (must be devnetified height + 1).")
+	txnsReplayCmd.Flags().Int64Var(&replayCfg.EndHeight, "sniffer-end-height", 0, "End height for the txns sniffer (optional, defaults to endless mode).")
 
-	rootCmd.AddCommand(txStateReplayCmd)
+	rootCmd.AddCommand(txnsReplayCmd)
 
 	orPanic(rootCmd.Execute())
 }

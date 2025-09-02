@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,8 +20,33 @@ import (
 	"github.com/InjectiveLabs/chain-stresser/v2/payload"
 )
 
+// StressMode defines different execution modes for the stresser
+type StressMode int
+
+const (
+	// ModeLocal is default mode that uses local accounts to generate and sign new transactions
+	ModeLocal StressMode = iota
+	// ModeRemote replays pre-signed transactions without using local accounts
+	ModeRemote
+)
+
+// String returns the string representation of StressMode
+func (m StressMode) String() string {
+	switch m {
+	case ModeLocal:
+		return "local"
+	case ModeRemote:
+		return "remote"
+	default:
+		return "unknown"
+	}
+}
+
 // StressConfig is the config for stress runner
 type StressConfig struct {
+	// Mode defines how the stresser operates
+	Mode StressMode
+
 	// ChainID (Cosmos) of the chain to connect to
 	ChainID string
 
@@ -41,6 +67,9 @@ type StressConfig struct {
 
 	// NumOfTransactions to send per account
 	NumOfTransactions int
+
+	// BatchRate defines the number of transactions to collect in each batch for ModeRemote
+	BatchRate int
 
 	// AwaitTxConfirmation to wait for transaction to be included in a block
 	AwaitTxConfirmation bool
@@ -85,248 +114,320 @@ func Stress(
 
 	var signedTxs [][][]byte
 	var initialAccountSequences []uint64
+	txQueue := make(chan payload.Tx, 1000000)
+	txSignedQueue := make(chan payload.Tx, 1000000)
 
-	err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
-		txQueue := make(chan payload.Tx, 1000000)
-		txSignedQueue := make(chan payload.Tx, 1000000)
+	switch config.Mode {
+	case ModeLocal:
 
-		for n := 0; n < runtime.NumCPU(); n++ {
-			spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
-				defer catcher.Catch(
-					catcher.RecvLog(true),
-					catcher.RecvDie(1, true),
-				)
+		err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 
-				for {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case tx, ok := <-txQueue:
-						if !ok {
-							return nil
-						}
-
-						signedTx, err := txProvider.BuildAndSignTx(
-							client,
-							tx,
-						)
-						orPanic(err)
-
-						select {
-						case <-ctx.Done():
-							return ctx.Err()
-
-						case txSignedQueue <- signedTx:
-						}
-					}
-				}
-			})
-		}
-
-		spawn("generate", parallel.Continue, func(ctx context.Context) error {
-			defer func() {
-				getAccountNumberSequencePace.Pause()
-			}()
-
-			defer catcher.Catch(
-				catcher.RecvLog(true),
-				catcher.RecvDie(1, true),
-			)
-
-			if len(config.Accounts) == 0 {
-				return errors.New("empty accounts list")
-			} else {
-				// this ensures that the state required for benchmark is correctly initialized
-				// for EVM transactions this usually deploys a smart contract. We can do it for each account
-				// if some account state needs to be initialized as well.
-				orPanic(createAndBroadcastInitialTxs(
-					ctx,
-					logger,
-					signedTxPace,
-					getAccountNumberSequencePace,
-					broadcastTxPace,
-					client,
-					txProvider,
-					config.Accounts,
-				))
-			}
-
-			initialAccountSequencesMux := new(sync.Mutex)
-			initialAccountSequences = make([]uint64, numOfAccounts)
-			pool := workerpool.New(runtime.NumCPU())
-
-			for fromIdx := 0; fromIdx < numOfAccounts; fromIdx++ {
-				fromPrivateKey := config.Accounts[fromIdx]
-				accAddress := fromPrivateKey.AccAddress()
-
-				pool.Submit(func() {
+			for n := 0; n < runtime.NumCPU(); n++ {
+				spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
 					defer catcher.Catch(
 						catcher.RecvLog(true),
 						catcher.RecvDie(1, true),
 					)
 
-					accNum, accSeq, err := getAccountNumberSequence(ctx, client, accAddress)
-					if err != nil {
-						err = errors.Wrap(err, "❌ Fetching account number and sequence failed")
-						logger.WithFields(log.Fields{
-							"accIdx":  fromIdx,
-							"address": accAddress,
-						}).WithError(err).Fatalln("❌ Fetching account number and sequence failed")
-
-						return
-					}
-
-					initialAccountSequencesMux.Lock()
-					initialAccountSequences[fromIdx] = accSeq
-					initialAccountSequencesMux.Unlock()
-					getAccountNumberSequencePace.Step(1)
-
-					txRequest := payload.TxRequest{
-						Keys: config.Accounts,
-
-						From: chain.Account{
-							Name:     fmt.Sprintf("sender-%d", fromIdx),
-							Key:      fromPrivateKey,
-							Number:   accNum,
-							Sequence: accSeq,
-						},
-
-						FromIdx: fromIdx,
-					}
-
-					for txIdx := 0; txIdx < config.NumOfTransactions; txIdx++ {
-						txRequest.TxIdx = txIdx
-
-						tx, err := txProvider.GenerateTx(txRequest)
-						orPanic(err)
-
+					for {
 						select {
 						case <-ctx.Done():
-							logger.WithFields(log.Fields{
-								"fromIdx": fromIdx,
-								"txIdx":   txIdx,
-							}).Fatalln("❌ Context ended prematurely")
+							return ctx.Err()
+						case tx, ok := <-txQueue:
+							if !ok {
+								return nil
+							}
 
-							return
-						case txQueue <- tx:
+							signedTx, err := txProvider.BuildAndSignTx(
+								client,
+								tx,
+							)
+							orPanic(err)
+
+							select {
+							case <-ctx.Done():
+								return ctx.Err()
+
+							case txSignedQueue <- signedTx:
+							}
 						}
-
-						txRequest.From.Sequence++
 					}
 				})
 			}
 
-			pool.StopWait()
-			return nil
-		})
+			spawn("generate", parallel.Continue, func(ctx context.Context) error {
+				defer func() {
+					getAccountNumberSequencePace.Pause()
+				}()
 
-		spawn("collect", parallel.Exit, func(ctx context.Context) error {
-			defer func() {
-				signedTxPace.Pause()
-			}()
+				defer catcher.Catch(
+					catcher.RecvLog(true),
+					catcher.RecvDie(1, true),
+				)
 
-			defer catcher.Catch(
-				catcher.RecvLog(true),
-				catcher.RecvDie(1, true),
-			)
-
-			signedTxs = make([][][]byte, numOfAccounts)
-			for i := 0; i < numOfAccounts; i++ {
-				signedTxs[i] = make([][]byte, config.NumOfTransactions)
-			}
-
-			for i := 0; i < numOfAccounts; i++ {
-				for j := 0; j < config.NumOfTransactions; j++ {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case txSigned := <-txSignedQueue:
-						signedTxs[txSigned.FromIdx()][txSigned.TxIdx()] = txSigned.Bytes()
-						signedTxPace.Step(1)
-					}
+				if len(config.Accounts) == 0 {
+					return errors.New("empty accounts list")
+				} else {
+					// this ensures that the state required for benchmark is correctly initialized
+					// for EVM transactions this usually deploys a smart contract. We can do it for each account
+					// if some account state needs to be initialized as well.
+					orPanic(createAndBroadcastInitialTxs(
+						ctx,
+						logger,
+						signedTxPace,
+						getAccountNumberSequencePace,
+						broadcastTxPace,
+						client,
+						txProvider,
+						config.Accounts,
+					))
 				}
-			}
 
-			return nil
-		})
+				initialAccountSequencesMux := new(sync.Mutex)
+				initialAccountSequences = make([]uint64, numOfAccounts)
+				pool := workerpool.New(runtime.NumCPU())
 
-		return nil
-	})
-	if err != nil {
-		return err
-	}
+				for fromIdx := 0; fromIdx < numOfAccounts; fromIdx++ {
+					fromPrivateKey := config.Accounts[fromIdx]
+					accAddress := fromPrivateKey.AccAddress()
 
-	logger.WithFields(log.Fields{
-		"elapsed": time.Since(startTs),
-	}).Infof("Transactions prepared 🙌")
-
-	startTs = time.Now()
-
-	logger.Info("Broadcasting transactions 🚀")
-	if err = parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
-		spawn("accounts", parallel.Exit, func(ctx context.Context) error {
-			return parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
-				for accountIdx, accountTxs := range signedTxs {
-					accountTxs := accountTxs
-					accountIdx := accountIdx
-
-					initialSequence := initialAccountSequences[accountIdx]
-					accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
-
-					spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
+					pool.Submit(func() {
 						defer catcher.Catch(
 							catcher.RecvLog(true),
 							catcher.RecvDie(1, true),
 						)
 
-						for txIndex := 0; txIndex < config.NumOfTransactions; {
-							tx := accountTxs[txIndex]
-
-							txHash, err := accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
-							if err != nil {
-								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
-									logger.WithError(err).WithFields(log.Fields{
-										"accIndex":           accountIdx,
-										"txIndex":            txIndex,
-										"initialAccSequence": initialSequence,
-										"expectedSequence":   expectedAccSeq,
-										"newSequence":        int(expectedAccSeq - initialSequence),
-									}).Debug("⚠️ Tx broadcasting failed, trying suggested sequence")
-
-									txIndex = int(expectedAccSeq - initialSequence)
-									continue
-								}
-
-								err = errors.Wrap(err, "⚠️ Tx broadcasting error")
-								return err
-							}
-
-							broadcastTxPace.Step(1)
+						accNum, accSeq, err := getAccountNumberSequence(ctx, client, accAddress)
+						if err != nil {
+							err = errors.Wrap(err, "❌ Fetching account number and sequence failed")
 							logger.WithFields(log.Fields{
-								"txHash": txHash,
-							}).Debug("✅ Tx broadcasted")
+								"accIdx":  fromIdx,
+								"address": accAddress,
+							}).WithError(err).Fatalln("❌ Fetching account number and sequence failed")
 
-							txIndex++
+							return
 						}
 
-						return nil
+						initialAccountSequencesMux.Lock()
+						initialAccountSequences[fromIdx] = accSeq
+						initialAccountSequencesMux.Unlock()
+						getAccountNumberSequencePace.Step(1)
+
+						txRequest := payload.TxRequest{
+							Keys: config.Accounts,
+
+							From: chain.Account{
+								Name:     fmt.Sprintf("sender-%d", fromIdx),
+								Key:      fromPrivateKey,
+								Number:   accNum,
+								Sequence: accSeq,
+							},
+
+							FromIdx: fromIdx,
+						}
+
+						for txIdx := 0; txIdx < config.NumOfTransactions; txIdx++ {
+							txRequest.TxIdx = txIdx
+
+							tx, err := txProvider.GenerateTx(txRequest)
+							orPanic(err)
+
+							select {
+							case <-ctx.Done():
+								logger.WithFields(log.Fields{
+									"fromIdx": fromIdx,
+									"txIdx":   txIdx,
+								}).Fatalln("❌ Context ended prematurely")
+
+								return
+							case txQueue <- tx:
+							}
+
+							txRequest.From.Sequence++
+						}
 					})
+				}
+
+				pool.StopWait()
+				return nil
+			})
+
+			spawn("collect", parallel.Exit, func(ctx context.Context) error {
+				defer func() {
+					signedTxPace.Pause()
+				}()
+
+				defer catcher.Catch(
+					catcher.RecvLog(true),
+					catcher.RecvDie(1, true),
+				)
+
+				signedTxs = make([][][]byte, numOfAccounts)
+				for i := 0; i < numOfAccounts; i++ {
+					signedTxs[i] = make([][]byte, config.NumOfTransactions)
+				}
+
+				for i := 0; i < numOfAccounts; i++ {
+					for j := 0; j < config.NumOfTransactions; j++ {
+						select {
+						case <-ctx.Done():
+							return ctx.Err()
+						case txSigned := <-txSignedQueue:
+							signedTxs[txSigned.FromIdx()][txSigned.TxIdx()] = txSigned.Bytes()
+							signedTxPace.Step(1)
+						}
+					}
 				}
 
 				return nil
 			})
+
+			return nil
 		})
+		if err != nil {
+			return err
+		}
 
-		return nil
-	}); err != nil {
-		return err
+		logger.WithFields(log.Fields{
+			"elapsed": time.Since(startTs),
+		}).Infof("Transactions prepared 🙌")
+
+		startTs = time.Now()
+
+		logger.Info("Broadcasting transactions 🚀")
+		if err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
+			spawn("accounts", parallel.Exit, func(ctx context.Context) error {
+				return parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
+					for accountIdx, accountTxs := range signedTxs {
+						accountTxs := accountTxs
+						accountIdx := accountIdx
+
+						initialSequence := initialAccountSequences[accountIdx]
+						accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+
+						spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
+							defer catcher.Catch(
+								catcher.RecvLog(true),
+								catcher.RecvDie(1, true),
+							)
+
+							for txIndex := 0; txIndex < config.NumOfTransactions; {
+								tx := accountTxs[txIndex]
+
+								txHash, err := accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
+								if err != nil {
+									if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
+										logger.WithError(err).WithFields(log.Fields{
+											"accIndex":           accountIdx,
+											"txIndex":            txIndex,
+											"initialAccSequence": initialSequence,
+											"expectedSequence":   expectedAccSeq,
+											"newSequence":        int(expectedAccSeq - initialSequence),
+										}).Debug("⚠️ Tx broadcasting failed, trying suggested sequence")
+
+										txIndex = int(expectedAccSeq - initialSequence)
+										continue
+									}
+
+									err = errors.Wrap(err, "⚠️ Tx broadcasting error")
+									return err
+								}
+
+								broadcastTxPace.Step(1)
+								logger.WithFields(log.Fields{
+									"txHash": txHash,
+								}).Debug("✅ Tx broadcasted")
+
+								txIndex++
+							}
+
+							return nil
+						})
+					}
+
+					return nil
+				})
+			})
+
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		broadcastTxPace.Pause()
+		logger.WithFields(log.Fields{
+			"broadcastDuration": time.Since(startTs),
+		}).Info("Benchmark done 🎉")
+
+		// Remote mode is used to replay pre-signed transactions
+	case ModeRemote:
+		accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+
+		// Use block-based replay to maintain original block boundaries
+		if blockProvider, ok := txProvider.(interface{ GetNextBlockTxs() ([]payload.Tx, error) }); ok {
+			logger.Info("Using block-based replay that maintains original block boundaries")
+
+			for {
+				txBatch, err := blockProvider.GetNextBlockTxs()
+				if err != nil {
+					if err.Error() == "no more blocks available - processing completed" {
+						logger.Info("Block replay completed successfully")
+						return nil
+					}
+					logger.WithError(err).Error("Failed to get next block transactions")
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+
+				if len(txBatch) == 0 {
+					continue
+				}
+
+				logger.WithFields(log.Fields{
+					"block_txs": len(txBatch),
+				}).Info("Broadcasting block transactions")
+
+				// Broadcast all transactions from this block sequentially to preserve acc seq order
+				successCount := 0
+				timeoutErrors := 0
+				sequenceErrors := 0
+				otherErrors := 0
+
+				for _, tx := range txBatch {
+					txBytes := tx.Bytes()
+
+					txHash, err := accountClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+					if err != nil {
+						errMsg := err.Error()
+						if strings.Contains(errMsg, "tx timeout height") {
+							timeoutErrors++
+						} else if strings.Contains(errMsg, "account sequence mismatch") {
+							sequenceErrors++
+						} else {
+							otherErrors++
+						}
+					} else {
+						if txHash == "" {
+							otherErrors++
+						} else {
+							successCount++
+							broadcastTxPace.Step(1)
+						}
+					}
+				}
+
+				logger.WithFields(log.Fields{
+					"total":           len(txBatch),
+					"success":         successCount,
+					"timeout_errors":  timeoutErrors,
+					"sequence_errors": sequenceErrors,
+					"other_errors":    otherErrors,
+				}).Info("Block broadcast summary")
+			}
+		}
+	default:
+		return errors.New("invalid mode")
 	}
-
-	broadcastTxPace.Pause()
-	logger.WithFields(log.Fields{
-		"broadcastDuration": time.Since(startTs),
-	}).Info("Benchmark done 🎉")
-
 	return nil
 }
 
