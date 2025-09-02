@@ -68,9 +68,6 @@ type StressConfig struct {
 	// NumOfTransactions to send per account
 	NumOfTransactions int
 
-	// BatchRate defines the number of transactions to collect in each batch for ModeRemote
-	BatchRate int
-
 	// AwaitTxConfirmation to wait for transaction to be included in a block
 	AwaitTxConfirmation bool
 }
