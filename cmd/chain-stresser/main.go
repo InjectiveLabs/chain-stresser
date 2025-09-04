@@ -523,11 +523,10 @@ func main() {
 				return errors.Wrap(err, "failed to initiate txns replay stress provider")
 			}
 
-			stressCfg.Mode = stresser.ModeRemote
 			// Explicitly set to false to avoid waiting for block confirmation, so we can replay faster (otherwise its 1TX per block)
 			stressCfg.AwaitTxConfirmation = false
 
-			if err := stresser.Stress(rootCtx, stressCfg, txnsReplayProvider); err != nil {
+			if err := stresser.StressReplay(rootCtx, stressCfg, txnsReplayProvider); err != nil {
 				log.Errorf("❌ benchmark failed:\n\n%s", err)
 				os.Exit(-1)
 			}
