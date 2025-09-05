@@ -944,6 +944,8 @@ github.com/xlab/suplog/hooks/bugsnag v0.0.0-20220720111129-da4fb2555fa2 h1:w4IOI
 github.com/xlab/suplog/hooks/bugsnag v0.0.0-20220720111129-da4fb2555fa2/go.mod h1:LuRWPshv3h7aCxkeJpmWvyQsRlSygru9kuyjJ8oDqYw=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 h1:bAn7/zixMGCfxrRTfdpNzjtPYqr8smhKouy9mxVdGPU=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673/go.mod h1:N3UwUGtsrSj3ccvlPHLoLsHnpR27oXr4ZE984MbSER8=
+github.com/ybbus/jsonrpc/v3 v3.1.6 h1:Yn2dNOZ3xVdOVxq9d4GaH2pxjjei27C+vU6H+E7hfAw=
+github.com/ybbus/jsonrpc/v3 v3.1.6/go.mod h1:U1QbyNfL5Pvi2roT0OpRbJeyvGxfWYSgKJHjxWdAEeE=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=

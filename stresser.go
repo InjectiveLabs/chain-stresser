@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,10 +86,10 @@ func Stress(
 
 	var signedTxs [][][]byte
 	var initialAccountSequences []uint64
+	txQueue := make(chan payload.Tx, 1000000)
+	txSignedQueue := make(chan payload.Tx, 1000000)
 
 	err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
-		txQueue := make(chan payload.Tx, 1000000)
-		txSignedQueue := make(chan payload.Tx, 1000000)
 
 		for n := 0; n < runtime.NumCPU(); n++ {
 			spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
@@ -263,7 +264,7 @@ func Stress(
 	startTs = time.Now()
 
 	logger.Info("Broadcasting transactions 🚀")
-	if err = parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
+	if err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 		spawn("accounts", parallel.Exit, func(ctx context.Context) error {
 			return parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 				for accountIdx, accountTxs := range signedTxs {
@@ -326,6 +327,83 @@ func Stress(
 	logger.WithFields(log.Fields{
 		"broadcastDuration": time.Since(startTs),
 	}).Info("Benchmark done 🎉")
+
+	return nil
+}
+
+// StressReplay is used to replay raw transactions from a remote chain
+func StressReplay(
+	ctx context.Context,
+	config StressConfig,
+	txProvider payload.TxProvider,
+) error {
+	logger := log.WithField("bench", txProvider.Name())
+
+	accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
+
+	// Use block-based replay to maintain original block boundaries
+	if blockProvider, ok := txProvider.(interface{ GetNextBlockTxs() ([]payload.Tx, error) }); ok {
+		logger.Info("Using block-based replay that maintains original block boundaries")
+
+		for {
+			txBatch, err := blockProvider.GetNextBlockTxs()
+			if err != nil {
+				if err.Error() == "no more blocks available - processing completed" {
+					logger.Info("Block replay completed successfully")
+					return nil
+				}
+				logger.WithError(err).Error("Failed to get next block transactions")
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			if len(txBatch) == 0 {
+				continue
+			}
+
+			logger.WithFields(log.Fields{
+				"block_txs": len(txBatch),
+			}).Info("Broadcasting block transactions")
+
+			// Broadcast all transactions from this block sequentially to preserve acc seq order
+			successCount := 0
+			timeoutErrors := 0
+			sequenceErrors := 0
+			otherErrors := 0
+
+			for _, tx := range txBatch {
+				txBytes := tx.Bytes()
+
+				txHash, err := accountClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+				if err != nil {
+					errMsg := err.Error()
+					if strings.Contains(errMsg, "tx timeout height") {
+						timeoutErrors++
+					} else if strings.Contains(errMsg, "account sequence mismatch") {
+						sequenceErrors++
+					} else {
+						otherErrors++
+					}
+				} else {
+					if txHash == "" {
+						otherErrors++
+					} else {
+						successCount++
+						broadcastTxPace.Step(1)
+					}
+				}
+			}
+
+			logger.WithFields(log.Fields{
+				"total":           len(txBatch),
+				"success":         successCount,
+				"timeout_errors":  timeoutErrors,
+				"sequence_errors": sequenceErrors,
+				"other_errors":    otherErrors,
+			}).Info("Block broadcast summary")
+		}
+	}
 
 	return nil
 }
