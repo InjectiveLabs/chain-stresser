@@ -180,7 +180,6 @@
       "binary_options_markets": [],
       "binary_options_market_ids_scheduled_for_settlement": [],
       "spot_market_ids_scheduled_to_force_close": [],
-      "denom_decimals": [],
       "conditional_derivative_orderbooks": [],
       "market_fee_multipliers": [],
       "orderbook_sequences": [],
