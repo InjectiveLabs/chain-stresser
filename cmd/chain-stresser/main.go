@@ -538,6 +538,17 @@ func main() {
 	txnsReplayCmd.Flags().Int64Var(&replayCfg.StartHeight, "sniffer-start-height", 0, "Start height for the txns sniffer (must be devnetified height + 1).")
 	txnsReplayCmd.Flags().Int64Var(&replayCfg.EndHeight, "sniffer-end-height", 0, "End height for the txns sniffer (optional, defaults to endless mode).")
 
+	// Gas fuzzing configuration flags
+	txnsReplayCmd.Flags().BoolVar(&stressCfg.GasFuzzing.Enabled, "gas-fuzz", false, "Enable gas value fuzzing for transactions during replay.")
+	txnsReplayCmd.Flags().StringVar(&stressCfg.GasFuzzing.Strategy, "gas-fuzz-strategy", "random", "Gas fuzzing strategy: random, boundary, incremental, chaos.")
+	txnsReplayCmd.Flags().IntVar(&stressCfg.GasFuzzing.FuzzPercentage, "gas-fuzz-percentage", 100, "Percentage of transactions to fuzz (0-100).")
+	txnsReplayCmd.Flags().Float64Var(&stressCfg.GasFuzzing.GasLimitMultiplierMin, "gas-limit-min", 0.5, "Minimum gas limit multiplier.")
+	txnsReplayCmd.Flags().Float64Var(&stressCfg.GasFuzzing.GasLimitMultiplierMax, "gas-limit-max", 5.0, "Maximum gas limit multiplier.")
+	txnsReplayCmd.Flags().Float64Var(&stressCfg.GasFuzzing.GasPriceMultiplierMin, "gas-price-min", 0.1, "Minimum gas price multiplier.")
+	txnsReplayCmd.Flags().Float64Var(&stressCfg.GasFuzzing.GasPriceMultiplierMax, "gas-price-max", 10.0, "Maximum gas price multiplier.")
+	txnsReplayCmd.Flags().Int64Var(&stressCfg.GasFuzzing.Seed, "gas-fuzz-seed", 0, "Seed for deterministic fuzzing (0 for random).")
+	txnsReplayCmd.Flags().BoolVar(&stressCfg.GasFuzzing.VerboseLogging, "gas-fuzz-verbose", false, "Enable detailed before/after transaction logging for gas fuzzing.")
+
 	rootCmd.AddCommand(txnsReplayCmd)
 
 	orPanic(rootCmd.Execute())
