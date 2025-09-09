@@ -244,9 +244,21 @@ func (f *GasFuzzer) createFuzzedTransaction(
 		txBuilder.SetTimeoutHeight(timeoutTx.GetTimeoutHeight())
 	}
 
-	// Copy signatures (this is tricky as signatures may become invalid)
-	// For replay scenarios, we'll create an unsigned transaction
-	// The signature validation will be handled by the receiving chain
+	// Copy signatures as-is from the original transaction
+	if sigTx, ok := originalTx.(authsigning.SigVerifiableTx); ok {
+		signatures, err := sigTx.GetSignaturesV2()
+		if err != nil {
+			f.logger.WithError(err).Warning("Failed to get signatures from original transaction, proceeding with unsigned transaction")
+		} else if len(signatures) > 0 {
+			if err := txBuilder.SetSignatures(signatures...); err != nil {
+				f.logger.WithError(err).Warning("Failed to set signatures on fuzzed transaction, proceeding with unsigned transaction")
+			} else {
+				f.logger.WithField("signature_count", len(signatures)).Debug("✅ Successfully copied signatures to fuzzed transaction")
+			}
+		} else {
+			f.logger.Debug("Original transaction has no signatures to copy")
+		}
+	}
 
 	return txBuilder.GetTx(), nil
 }
