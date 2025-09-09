@@ -390,6 +390,7 @@ func StressReplay(
 			successCount := 0
 			timeoutErrors := 0
 			sequenceErrors := 0
+			gasFeeErrors := 0
 			otherErrors := 0
 			fuzzedCount := 0
 
@@ -446,8 +447,10 @@ func StressReplay(
 						timeoutErrors++
 					} else if strings.Contains(errMsg, "account sequence mismatch") {
 						sequenceErrors++
+					} else if strings.Contains(errMsg, "insufficient fee") {
+						gasFeeErrors++
 					} else {
-						logger.WithError(err).Error("Failed to broadcast transaction")
+						logger.WithError(err).Error("CHECK THIS ERROR")
 						otherErrors++
 					}
 				} else {
@@ -465,6 +468,7 @@ func StressReplay(
 				"success":         successCount,
 				"timeout_errors":  timeoutErrors,
 				"sequence_errors": sequenceErrors,
+				"gas_fee_errors":  gasFeeErrors,
 				"other_errors":    otherErrors,
 			}
 
