@@ -55,6 +55,51 @@ type StressConfig struct {
 // this is internal to the stresser and not configurable for now.
 const maxParallelInitialTxsBroadcasts = 8
 
+// handleFallbackBroadcast attempts to broadcast the original transaction when fuzzed transaction fails
+func handleFallbackBroadcast(
+	ctx context.Context,
+	originalTxBytes []byte,
+	accountClient chain.Client,
+	config StressConfig,
+	fuzzedError string,
+	logger log.Logger,
+) (txHash string, err error, wasSuccessful bool) {
+	logger.WithFields(log.Fields{
+		"fuzzed_error": fuzzedError,
+	}).Debug("🔄 Fuzzed transaction failed with insufficient fee, retrying with original")
+
+	fallbackTxHash, fallbackErr := accountClient.Broadcast(ctx, originalTxBytes, config.AwaitTxConfirmation)
+	if fallbackErr != nil {
+		logger.WithFields(log.Fields{
+			"fuzzed_error":   fuzzedError,
+			"original_error": fallbackErr.Error(),
+		}).Debug("🚫 Both fuzzed and original transactions failed")
+		return "", fallbackErr, false
+	}
+
+	if fallbackTxHash == "" {
+		return "", fmt.Errorf("fallback transaction returned empty hash"), false
+	}
+
+	logger.WithFields(log.Fields{
+		"original_tx_hash": fallbackTxHash,
+	}).Debug("✅ Original transaction succeeded after fuzzed failure")
+	return fallbackTxHash, nil, true
+}
+
+// categorizeError categorizes broadcast errors into different types
+func categorizeError(errMsg string, timeoutErrors, sequenceErrors, gasFeeErrors, otherErrors *int) {
+	if strings.Contains(errMsg, "tx timeout height") {
+		*timeoutErrors++
+	} else if strings.Contains(errMsg, "account sequence mismatch") {
+		*sequenceErrors++
+	} else if strings.Contains(errMsg, "insufficient fee") {
+		*gasFeeErrors++
+	} else {
+		*otherErrors++
+	}
+}
+
 // fuzzTransactions applies gas fuzzing to a transaction if enabled
 func fuzzTransactions(
 	txBytes []byte,
@@ -449,13 +494,15 @@ func StressReplay(
 			gasFeeErrors := 0
 			otherErrors := 0
 			fuzzedCount := 0
+			fallbackCount := 0
 
 			for _, tx := range txBatch {
-				txBytes := tx.Bytes()
+				originalTxBytes := tx.Bytes()
+				txBytes := originalTxBytes
+				wasFuzzed := false
 
 				// Apply gas fuzzing if enabled
 				if gasFuzzer != nil {
-					var wasFuzzed bool
 					txBytes, wasFuzzed = fuzzTransactions(txBytes, gasFuzzer, accountClient, config, logger)
 					if wasFuzzed {
 						fuzzedCount++
@@ -463,24 +510,34 @@ func StressReplay(
 				}
 
 				txHash, err := accountClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+
+				// Handle broadcast result
 				if err != nil {
 					errMsg := err.Error()
-					if strings.Contains(errMsg, "tx timeout height") {
-						timeoutErrors++
-					} else if strings.Contains(errMsg, "account sequence mismatch") {
-						sequenceErrors++
-					} else if strings.Contains(errMsg, "insufficient fee") {
-						gasFeeErrors++
+					// Record error for fuzzed transactions
+					categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
+
+					// Try fallback for fuzzed transactions that fail with insufficient fee
+					if wasFuzzed && strings.Contains(errMsg, "insufficient fee") {
+						fallbackHash, fallbackErr, fallbackSuccess := handleFallbackBroadcast(
+							ctx, originalTxBytes, accountClient, config, errMsg, logger)
+
+						if fallbackSuccess {
+							successCount++
+							fallbackCount++
+							broadcastTxPace.Step(1)
+							txHash = fallbackHash
+						} else {
+							categorizeError(fallbackErr.Error(), &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
+						}
 					} else {
-						otherErrors++
+						categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
 					}
+				} else if txHash == "" {
+					otherErrors++
 				} else {
-					if txHash == "" {
-						otherErrors++
-					} else {
-						successCount++
-						broadcastTxPace.Step(1)
-					}
+					successCount++
+					broadcastTxPace.Step(1)
 				}
 			}
 
@@ -496,6 +553,10 @@ func StressReplay(
 			if gasFuzzer != nil {
 				logFields["fuzzed_transactions"] = fuzzedCount
 				logFields["fuzz_rate"] = fmt.Sprintf("%.1f%%", float64(fuzzedCount)/float64(len(txBatch))*100)
+				if fallbackCount > 0 {
+					logFields["fallback_successes"] = fallbackCount
+					logFields["fallback_rate"] = fmt.Sprintf("%.1f%%", float64(fallbackCount)/float64(fuzzedCount)*100)
+				}
 			}
 
 			logger.WithFields(logFields).Info("Block broadcast summary")
