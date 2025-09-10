@@ -24,16 +24,16 @@ type GasFuzzingConfig struct {
 	// Strategy defines the fuzzing approach: "random", "boundary"
 	Strategy string
 
-	// GasLimitMultiplierMin minimum multiplier for gas limit (default: 0.5)
+	// GasLimitMultiplierMin minimum multiplier for gas limit (default: 0.01)
 	GasLimitMultiplierMin float64
 
-	// GasLimitMultiplierMax maximum multiplier for gas limit (default: 5.0)
+	// GasLimitMultiplierMax maximum multiplier for gas limit (default: 1.0)
 	GasLimitMultiplierMax float64
 
-	// GasPriceMultiplierMin minimum multiplier for gas price (default: 0.1)
+	// GasPriceMultiplierMin minimum multiplier for gas price (default: 0.01)
 	GasPriceMultiplierMin float64
 
-	// GasPriceMultiplierMax maximum multiplier for gas price (default: 10.0)
+	// GasPriceMultiplierMax maximum multiplier for gas price (default: 1.0)
 	GasPriceMultiplierMax float64
 
 	// Seed for deterministic fuzzing (0 for random)
