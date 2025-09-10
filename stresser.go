@@ -66,7 +66,7 @@ func handleFallbackBroadcast(
 ) (txHash string, err error, wasSuccessful bool) {
 	logger.WithFields(log.Fields{
 		"fuzzed_error": fuzzedError,
-	}).Debug("🔄 Fuzzed transaction failed with insufficient fee, retrying with original")
+	}).Debug("🔄 Fuzzed transaction failed with out of gas error, retrying with original")
 
 	fallbackTxHash, fallbackErr := accountClient.Broadcast(ctx, originalTxBytes, config.AwaitTxConfirmation)
 	if fallbackErr != nil {
@@ -88,13 +88,13 @@ func handleFallbackBroadcast(
 }
 
 // categorizeError categorizes broadcast errors into different types
-func categorizeError(errMsg string, timeoutErrors, sequenceErrors, gasFeeErrors, otherErrors *int) {
+func categorizeError(errMsg string, timeoutErrors, sequenceErrors, outOfGasErrors, otherErrors *int, logger log.Logger) {
 	if strings.Contains(errMsg, "tx timeout height") {
 		*timeoutErrors++
 	} else if strings.Contains(errMsg, "account sequence mismatch") {
 		*sequenceErrors++
-	} else if strings.Contains(errMsg, "insufficient fee") {
-		*gasFeeErrors++
+	} else if strings.Contains(errMsg, "out of gas") {
+		*outOfGasErrors++
 	} else {
 		*otherErrors++
 	}
@@ -145,10 +145,9 @@ func fuzzTransactions(
 		if originalTxInfo != nil && fuzzedTxInfo != nil {
 			logger.WithFields(log.Fields{
 				"gas_limit_change": fmt.Sprintf("%v → %v", originalTxInfo["gas_limit"], fuzzedTxInfo["gas_limit"]),
-				"gas_fee_change":   fmt.Sprintf("%v → %v", originalTxInfo["total_fee"], fuzzedTxInfo["total_fee"]),
 				"tx_hash_change":   fmt.Sprintf("%v → %v", originalTxInfo["tx_hash"], fuzzedTxInfo["tx_hash"]),
 				"strategy":         config.GasFuzzing.Strategy,
-			}).Debug("🔥 Gas fuzzing applied successfully")
+			}).Debug("🔥 Gas limit fuzzing applied successfully")
 		}
 	}
 
@@ -455,9 +454,7 @@ func StressReplay(
 			"fuzz_percentage":          config.GasFuzzing.FuzzPercentage,
 			"gas_limit_multiplier_min": config.GasFuzzing.GasLimitMultiplierMin,
 			"gas_limit_multiplier_max": config.GasFuzzing.GasLimitMultiplierMax,
-			"gas_price_multiplier_min": config.GasFuzzing.GasPriceMultiplierMin,
-			"gas_price_multiplier_max": config.GasFuzzing.GasPriceMultiplierMax,
-		}).Info("Gas fuzzing enabled for transaction replay")
+		}).Info("Gas limit fuzzing enabled for transaction replay")
 	}
 
 	// Use block-based replay to maintain original block boundaries
@@ -488,7 +485,7 @@ func StressReplay(
 			successCount := 0
 			timeoutErrors := 0
 			sequenceErrors := 0
-			gasFeeErrors := 0
+			outOfGasErrors := 0
 			otherErrors := 0
 			fuzzedCount := 0
 			fallbackCount := 0
@@ -512,10 +509,10 @@ func StressReplay(
 				if err != nil {
 					errMsg := err.Error()
 					// Record error for fuzzed transactions
-					categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
+					categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
 
 					// Try fallback for fuzzed transactions that fail with insufficient fee
-					if wasFuzzed && strings.Contains(errMsg, "insufficient fee") {
+					if wasFuzzed && strings.Contains(errMsg, "out of gas") {
 						fallbackHash, fallbackErr, fallbackSuccess := handleFallbackBroadcast(
 							ctx, originalTxBytes, accountClient, config, errMsg, logger)
 
@@ -525,10 +522,10 @@ func StressReplay(
 							broadcastTxPace.Step(1)
 							txHash = fallbackHash
 						} else {
-							categorizeError(fallbackErr.Error(), &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
+							categorizeError(fallbackErr.Error(), &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
 						}
 					} else {
-						categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &gasFeeErrors, &otherErrors)
+						categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
 					}
 				} else if txHash == "" {
 					otherErrors++
@@ -543,7 +540,7 @@ func StressReplay(
 				"success":         successCount,
 				"timeout_errors":  timeoutErrors,
 				"sequence_errors": sequenceErrors,
-				"gas_fee_errors":  gasFeeErrors,
+				"out_of_gas_errors":  outOfGasErrors,
 				"other_errors":    otherErrors,
 			}
 

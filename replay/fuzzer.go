@@ -10,15 +10,14 @@ import (
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 	"github.com/pkg/errors"
 
-	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	log "github.com/xlab/suplog"
 )
 
-// GasFuzzingConfig defines configuration options for gas fuzzing
+// GasFuzzingConfig defines configuration options for gas limit fuzzing
 type GasFuzzingConfig struct {
-	// Enabled controls whether gas fuzzing is active
+	// Enabled controls whether gas limit fuzzing is active
 	Enabled bool
 
 	// Strategy defines the fuzzing approach: "random", "boundary"
@@ -30,12 +29,6 @@ type GasFuzzingConfig struct {
 	// GasLimitMultiplierMax maximum multiplier for gas limit (default: 1.0)
 	GasLimitMultiplierMax float64
 
-	// GasPriceMultiplierMin minimum multiplier for gas price (default: 0.01)
-	GasPriceMultiplierMin float64
-
-	// GasPriceMultiplierMax maximum multiplier for gas price (default: 1.0)
-	GasPriceMultiplierMax float64
-
 	// Seed for deterministic fuzzing (0 for random)
 	Seed int64
 
@@ -46,7 +39,7 @@ type GasFuzzingConfig struct {
 	VerboseLogging bool
 }
 
-// GasFuzzer handles gas value fuzzing for transactions during replay
+// GasFuzzer handles gas limit fuzzing for transactions during replay
 type GasFuzzer struct {
 	config    GasFuzzingConfig
 	rng       *rand.Rand
@@ -66,12 +59,6 @@ func NewGasFuzzer(config GasFuzzingConfig) *GasFuzzer {
 	}
 	if config.GasLimitMultiplierMax == 0 {
 		config.GasLimitMultiplierMax = 5.0
-	}
-	if config.GasPriceMultiplierMin == 0 {
-		config.GasPriceMultiplierMin = 0.1
-	}
-	if config.GasPriceMultiplierMax == 0 {
-		config.GasPriceMultiplierMax = 10.0
 	}
 	if config.FuzzPercentage == 0 {
 		config.FuzzPercentage = 100 // Default to fuzzing all transactions
@@ -124,98 +111,62 @@ func (f *GasFuzzer) FuzzTransaction(txBytes []byte, client chain.Client) ([]byte
 	originalFee := feeTx.GetFee()
 
 	// Apply fuzzing strategy
-	newGasLimit, newFee, err := f.applyFuzzingStrategy(originalGasLimit, originalFee)
+	newGasLimit, err := f.applyFuzzingStrategy(originalGasLimit)
 	if err != nil {
 		f.logger.WithError(err).Warning("Failed to apply fuzzing strategy, using original values")
 		return txBytes, nil
 	}
 
 	// Create new transaction with fuzzed gas values
-	fuzzedTx, err := f.createFuzzedTransaction(tx, newGasLimit, newFee, client)
+	fuzzedTx, err := f.createFuzzedTransaction(tx, newGasLimit, originalFee, client)
 	if err != nil {
 		f.logger.WithError(err).Warning("Failed to create fuzzed transaction, using original")
 		return txBytes, nil
 	}
 
-	// Calculate multipliers for logging
-	gasLimitMultiplier := float64(newGasLimit) / float64(originalGasLimit)
-
-	f.logger.WithFields(log.Fields{
-		"strategy":             f.config.Strategy,
-		"tx_counter":           f.txCounter,
-		"original_gas_limit":   originalGasLimit,
-		"fuzzed_gas_limit":     newGasLimit,
-		"gas_limit_multiplier": fmt.Sprintf("%.3f", gasLimitMultiplier),
-		"original_fee":         originalFee.String(),
-		"fuzzed_fee":           newFee.String(),
-	}).Debug("💫 Gas fuzzer: Transaction modified")
-
 	return client.Encode(fuzzedTx), nil
 }
 
-// applyFuzzingStrategy applies the configured fuzzing strategy to gas values
-func (f *GasFuzzer) applyFuzzingStrategy(gasLimit uint64, fee sdk.Coins) (uint64, sdk.Coins, error) {
+// applyFuzzingStrategy applies the configured fuzzing strategy to gas limit
+func (f *GasFuzzer) applyFuzzingStrategy(gasLimit uint64) (uint64, error) {
 	switch f.config.Strategy {
 	case "random":
-		return f.randomFuzzing(gasLimit, fee)
+		return f.randomFuzzing(gasLimit)
 	case "boundary":
-		return f.boundaryFuzzing(gasLimit, fee)
+		return f.boundaryFuzzing(gasLimit)
 	default:
-		return f.randomFuzzing(gasLimit, fee)
+		return f.randomFuzzing(gasLimit)
 	}
 }
 
-// randomFuzzing applies random multipliers within configured ranges
-func (f *GasFuzzer) randomFuzzing(gasLimit uint64, fee sdk.Coins) (uint64, sdk.Coins, error) {
+// randomFuzzing applies random gas limit multiplier within configured range
+func (f *GasFuzzer) randomFuzzing(gasLimit uint64) (uint64, error) {
 	// Random gas limit multiplier
 	gasMultiplier := f.config.GasLimitMultiplierMin +
 		f.rng.Float64()*(f.config.GasLimitMultiplierMax-f.config.GasLimitMultiplierMin)
 	newGasLimit := uint64(float64(gasLimit) * gasMultiplier)
 
-	// Random gas price multiplier
-	priceMultiplier := f.config.GasPriceMultiplierMin +
-		f.rng.Float64()*(f.config.GasPriceMultiplierMax-f.config.GasPriceMultiplierMin)
-
-	newFee := f.multiplyCoins(fee, priceMultiplier)
-
-	return newGasLimit, newFee, nil
+	return newGasLimit, nil
 }
 
-// boundaryFuzzing tests extreme values (min/max multipliers)
-func (f *GasFuzzer) boundaryFuzzing(gasLimit uint64, fee sdk.Coins) (uint64, sdk.Coins, error) {
+// boundaryFuzzing tests extreme gas limit values (min/max multipliers)
+func (f *GasFuzzer) boundaryFuzzing(gasLimit uint64) (uint64, error) {
 	// Alternate between min and max values based on transaction counter
 	useMin := f.txCounter%2 == 0
 
-	var gasMultiplier, priceMultiplier float64
+	var gasMultiplier float64
 	if useMin {
 		gasMultiplier = f.config.GasLimitMultiplierMin
-		priceMultiplier = f.config.GasPriceMultiplierMin
 	} else {
 		gasMultiplier = f.config.GasLimitMultiplierMax
-		priceMultiplier = f.config.GasPriceMultiplierMax
 	}
 
 	newGasLimit := uint64(float64(gasLimit) * gasMultiplier)
-	newFee := f.multiplyCoins(fee, priceMultiplier)
 
-	return newGasLimit, newFee, nil
+	return newGasLimit, nil
 }
 
-// multiplyCoins multiplies all coin amounts by the given multiplier
-func (f *GasFuzzer) multiplyCoins(coins sdk.Coins, multiplier float64) sdk.Coins {
-	result := make(sdk.Coins, len(coins))
-	for i, coin := range coins {
-		// Simple multiplication with precision handling
-		newAmount := coin.Amount.MulRaw(int64(multiplier * 1000000)).QuoRaw(1000000)
-		if newAmount.IsZero() {
-			newAmount = sdkmath.NewInt(1)
-		}
-		result[i] = sdk.NewCoin(coin.Denom, newAmount)
-	}
-	return result
-}
-
-// createFuzzedTransaction creates a new transaction with modified gas values
+// createFuzzedTransaction creates a new transaction with modified gas limit
 func (f *GasFuzzer) createFuzzedTransaction(
 	originalTx sdk.Tx,
 	gasLimit uint64,
@@ -239,12 +190,10 @@ func (f *GasFuzzer) createFuzzedTransaction(
 	if feeTx, ok := originalTx.(sdk.FeeTx); ok {
 		if feeGranter := feeTx.FeeGranter(); len(feeGranter) > 0 {
 			txBuilder.SetFeeGranter(sdk.AccAddress(feeGranter))
-			f.logger.WithField("fee_granter", sdk.AccAddress(feeGranter).String()).Debug("Preserved fee granter in fuzzed transaction")
 		}
 
 		if feePayer := feeTx.FeePayer(); len(feePayer) > 0 {
 			txBuilder.SetFeePayer(sdk.AccAddress(feePayer))
-			f.logger.WithField("fee_payer", sdk.AccAddress(feePayer).String()).Debug("Preserved fee payer in fuzzed transaction")
 		}
 	}
 
@@ -265,8 +214,6 @@ func (f *GasFuzzer) createFuzzedTransaction(
 		} else if len(signatures) > 0 {
 			if err := txBuilder.SetSignatures(signatures...); err != nil {
 				f.logger.WithError(err).Warning("Failed to set signatures on fuzzed transaction, proceeding with unsigned transaction")
-			} else {
-				f.logger.WithField("signature_count", len(signatures)).Debug("✅ Successfully copied signatures to fuzzed transaction")
 			}
 		} else {
 			f.logger.Debug("Original transaction has no signatures to copy")
