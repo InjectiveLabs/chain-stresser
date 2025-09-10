@@ -51,11 +51,67 @@ type StressConfig struct {
 	GasFuzzing replay.GasFuzzingConfig
 }
 
-
-
 // maxParallelInitialTxsBroadcasts is the maximum number of initial txs to broadcast in parallel.
 // this is internal to the stresser and not configurable for now.
 const maxParallelInitialTxsBroadcasts = 8
+
+// fuzzTransactions applies gas fuzzing to a transaction if enabled
+func fuzzTransactions(
+	txBytes []byte,
+	gasFuzzer *replay.GasFuzzer,
+	accountClient chain.Client,
+	config StressConfig,
+	logger log.Logger,
+) ([]byte, bool) {
+	if gasFuzzer == nil {
+		return txBytes, false
+	}
+
+	var originalTxInfo, fuzzedTxInfo log.Fields
+
+	// Log original transaction details if verbose logging is enabled
+	if config.GasFuzzing.VerboseLogging {
+		originalTxInfo = replay.ExtractTransactionInfo(txBytes, accountClient, "ORIGINAL")
+		if originalTxInfo != nil {
+			logger.WithFields(originalTxInfo).Debug("📋 Transaction before fuzzing")
+		}
+	}
+
+	originalSize := len(txBytes)
+	fuzzedTxBytes, fuzzErr := gasFuzzer.FuzzTransaction(txBytes, accountClient)
+	if fuzzErr != nil {
+		logger.WithError(fuzzErr).Warning("Gas fuzzing failed, using original transaction")
+		return txBytes, false
+	}
+
+	// Check if transaction was actually modified
+	if len(fuzzedTxBytes) == originalSize && string(fuzzedTxBytes) == string(txBytes) {
+		return txBytes, false
+	}
+
+	// Log fuzzed transaction details if verbose logging is enabled
+	if config.GasFuzzing.VerboseLogging {
+		fuzzedTxInfo = replay.ExtractTransactionInfo(fuzzedTxBytes, accountClient, "FUZZED")
+		if fuzzedTxInfo != nil {
+			logger.WithFields(fuzzedTxInfo).Debug("🎯 Transaction after fuzzing")
+		}
+
+		// Log comparison
+		if originalTxInfo != nil && fuzzedTxInfo != nil {
+			logger.WithFields(log.Fields{
+				"gas_limit_change": fmt.Sprintf("%v → %v", originalTxInfo["gas_limit"], fuzzedTxInfo["gas_limit"]),
+				"gas_fee_change":   fmt.Sprintf("%v → %v", originalTxInfo["total_fee"], fuzzedTxInfo["total_fee"]),
+				"tx_hash_change":   fmt.Sprintf("%v → %v", originalTxInfo["tx_hash"], fuzzedTxInfo["tx_hash"]),
+				"strategy":         config.GasFuzzing.Strategy,
+			}).Info("🔥 Gas fuzzing applied successfully")
+		}
+	} else {
+		// Simple logging when verbose is disabled
+		logger.Debug("🔥 Transaction gas values fuzzed")
+	}
+
+	return fuzzedTxBytes, true
+}
 
 func Stress(
 	ctx context.Context,
@@ -399,43 +455,9 @@ func StressReplay(
 
 				// Apply gas fuzzing if enabled
 				if gasFuzzer != nil {
-					var originalTxInfo, fuzzedTxInfo log.Fields
-
-					// Log original transaction details if verbose logging is enabled
-					if config.GasFuzzing.VerboseLogging {
-						originalTxInfo = replay.ExtractTransactionInfo(txBytes, accountClient, "ORIGINAL")
-						if originalTxInfo != nil {
-							logger.WithFields(originalTxInfo).Debug("📋 Transaction before fuzzing")
-						}
-					}
-
-					originalSize := len(txBytes)
-					fuzzedTxBytes, fuzzErr := gasFuzzer.FuzzTransaction(txBytes, accountClient)
-					if fuzzErr != nil {
-						logger.WithError(fuzzErr).Warning("Gas fuzzing failed, using original transaction")
-					} else if len(fuzzedTxBytes) != originalSize || string(fuzzedTxBytes) != string(txBytes) {
-						// Log fuzzed transaction details if verbose logging is enabled
-						if config.GasFuzzing.VerboseLogging {
-							fuzzedTxInfo = replay.ExtractTransactionInfo(fuzzedTxBytes, accountClient, "FUZZED")
-							if fuzzedTxInfo != nil {
-								logger.WithFields(fuzzedTxInfo).Debug("🎯 Transaction after fuzzing")
-							}
-
-							// Log comparison
-							if originalTxInfo != nil && fuzzedTxInfo != nil {
-								logger.WithFields(log.Fields{
-									"gas_limit_change": fmt.Sprintf("%v → %v", originalTxInfo["gas_limit"], fuzzedTxInfo["gas_limit"]),
-									"gas_fee_change":   fmt.Sprintf("%v → %v", originalTxInfo["total_fee"], fuzzedTxInfo["total_fee"]),
-									"tx_hash_change":   fmt.Sprintf("%v → %v", originalTxInfo["tx_hash"], fuzzedTxInfo["tx_hash"]),
-									"strategy":         config.GasFuzzing.Strategy,
-								}).Info("🔥 Gas fuzzing applied successfully")
-							}
-						} else {
-							// Simple logging when verbose is disabled
-							logger.Debug("🔥 Transaction gas values fuzzed")
-						}
-
-						txBytes = fuzzedTxBytes
+					var wasFuzzed bool
+					txBytes, wasFuzzed = fuzzTransactions(txBytes, gasFuzzer, accountClient, config, logger)
+					if wasFuzzed {
 						fuzzedCount++
 					}
 				}
