@@ -148,11 +148,8 @@ func fuzzTransactions(
 				"gas_fee_change":   fmt.Sprintf("%v → %v", originalTxInfo["total_fee"], fuzzedTxInfo["total_fee"]),
 				"tx_hash_change":   fmt.Sprintf("%v → %v", originalTxInfo["tx_hash"], fuzzedTxInfo["tx_hash"]),
 				"strategy":         config.GasFuzzing.Strategy,
-			}).Info("🔥 Gas fuzzing applied successfully")
+			}).Debug("🔥 Gas fuzzing applied successfully")
 		}
-	} else {
-		// Simple logging when verbose is disabled
-		logger.Debug("🔥 Transaction gas values fuzzed")
 	}
 
 	return fuzzedTxBytes, true
