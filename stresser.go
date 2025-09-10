@@ -450,7 +450,6 @@ func StressReplay(
 					} else if strings.Contains(errMsg, "insufficient fee") {
 						gasFeeErrors++
 					} else {
-						logger.WithError(err).Error("CHECK THIS ERROR")
 						otherErrors++
 					}
 				} else {

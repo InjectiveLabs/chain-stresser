@@ -235,6 +235,19 @@ func (f *GasFuzzer) createFuzzedTransaction(
 	txBuilder.SetGasLimit(gasLimit)
 	txBuilder.SetFeeAmount(fee)
 
+	// Copy fee granter and fee payer information (critical for authz transactions)
+	if feeTx, ok := originalTx.(sdk.FeeTx); ok {
+		if feeGranter := feeTx.FeeGranter(); len(feeGranter) > 0 {
+			txBuilder.SetFeeGranter(sdk.AccAddress(feeGranter))
+			f.logger.WithField("fee_granter", sdk.AccAddress(feeGranter).String()).Debug("Preserved fee granter in fuzzed transaction")
+		}
+
+		if feePayer := feeTx.FeePayer(); len(feePayer) > 0 {
+			txBuilder.SetFeePayer(sdk.AccAddress(feePayer))
+			f.logger.WithField("fee_payer", sdk.AccAddress(feePayer).String()).Debug("Preserved fee payer in fuzzed transaction")
+		}
+	}
+
 	// Copy other transaction attributes
 	if memTx, ok := originalTx.(sdk.TxWithMemo); ok {
 		txBuilder.SetMemo(memTx.GetMemo())
@@ -298,6 +311,15 @@ func ExtractTransactionInfo(txBytes []byte, client chain.Client, txType string) 
 			totalFee = totalFee.Add(coin)
 		}
 		fields["total_fee"] = totalFee.String()
+
+		// Extract fee granter and fee payer (important for authz transactions)
+		if feeGranter := feeTx.FeeGranter(); len(feeGranter) > 0 {
+			fields["fee_granter"] = sdk.AccAddress(feeGranter).String()
+		}
+
+		if feePayer := feeTx.FeePayer(); len(feePayer) > 0 {
+			fields["fee_payer"] = sdk.AccAddress(feePayer).String()
+		}
 	} else {
 		fields["gas_limit"] = "unknown (not FeeTx)"
 		fields["total_fee"] = "unknown (not FeeTx)"
@@ -321,6 +343,29 @@ func ExtractTransactionInfo(txBytes []byte, client chain.Client, txType string) 
 			fields["memo"] = memo
 		}
 	}
+
+	// Extract signature information and signer address
+	if sigTx, ok := tx.(authsigning.SigVerifiableTx); ok {
+		signatures, err := sigTx.GetSignaturesV2()
+		if err != nil {
+			fields["signature_error"] = err.Error()
+		} else {
+			fields["signature_count"] = len(signatures)
+			if len(signatures) > 0 {
+				// Get signer address from first signature
+				if pubKey := signatures[0].PubKey; pubKey != nil {
+					signerAddr := sdk.AccAddress(pubKey.Address())
+					fields["sender"] = signerAddr.String()
+					fields["first_sig_pubkey"] = fmt.Sprintf("%x", pubKey.Bytes()[:8])
+				}
+				fields["first_sig_sequence"] = signatures[0].Sequence
+			}
+		}
+	} else {
+		fields["signature_count"] = "unknown (not SigVerifiableTx)"
+	}
+
+	// Note: Extension options extraction is not supported in this SDK version
 
 	// Calculate transaction hash for identification
 	hash := sha256.Sum256(txBytes)
