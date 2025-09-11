@@ -131,7 +131,7 @@ func GenerateConfigs(
 		genesis.AddAccount(stakerPublicKey.Address(), initialBalanceStaker)
 		genesis.AddValidator(validatorPrivateKey.PubKey(), stakerPrivateKey, initialBalanceBonded)
 	}
-	orPanic(os.WriteFile(rootOutDir+"/validators/ids.json", bytesOrPanic(json.Marshal(validatorNodeIDs)), 0o600))
+	orPanic(os.WriteFile(rootOutDir+"/validators/ids.json", bytesOrPanic(json.Marshal(validatorNodeIDs)), 0o644))
 
 	for i := 0; i < env.NumOfInstances; i++ {
 		accounts := make([]chain.Secp256k1PrivateKey, 0, env.NumOfAccountsPerInstance)
@@ -143,10 +143,10 @@ func GenerateConfigs(
 		}
 
 		instanceDir := fmt.Sprintf("%s/instances/%d", rootOutDir, i)
-		orPanic(os.MkdirAll(instanceDir, 0o700))
+		orPanic(os.MkdirAll(instanceDir, 0o755))
 
 		accountsJSON := bytesOrPanic(json.Marshal(accounts))
-		orPanic(os.WriteFile(instanceDir+"/accounts.json", accountsJSON, 0o600))
+		orPanic(os.WriteFile(instanceDir+"/accounts.json", accountsJSON, 0o644))
 	}
 
 	for i := 0; i < env.NumOfValidators; i++ {
@@ -195,7 +195,7 @@ func GenerateConfigs(
 		}
 
 		idsJSON := bytesOrPanic(json.Marshal(sentryNodeIDs))
-		orPanic(os.WriteFile(rootOutDir+"/sentry-nodes/ids.json", idsJSON, 0o600))
+		orPanic(os.WriteFile(rootOutDir+"/sentry-nodes/ids.json", idsJSON, 0o644))
 	}
 
 	for i := 0; i < env.NumOfValidators; i++ {

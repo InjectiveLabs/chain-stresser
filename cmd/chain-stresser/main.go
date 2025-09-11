@@ -34,8 +34,7 @@ const (
 	defaultInjectiveDockerImage = "injectivelabs/injective-core"
 	defaultDockerSubnet         = "172.127.0.0/24"
 
-	// TODO: update to latest version when it's released
-	latestInjectiveCoreTag = "v1.16.0-beta.3"
+	latestInjectiveCoreTag = "v1.16.4"
 )
 
 var (

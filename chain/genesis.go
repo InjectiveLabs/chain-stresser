@@ -239,7 +239,7 @@ func (g *Genesis) Save(homeDir string) {
 	g.appState[banktypes.ModuleName] = g.clientCtx.Codec.MustMarshalJSON(g.bankState)
 	g.genesisDoc.AppState = bytesOrPanic(json.MarshalIndent(g.appState, "", "\t"))
 
-	orPanic(os.MkdirAll(homeDir+"/config", 0o700))
+	orPanic(os.MkdirAll(homeDir+"/config", 0o755))
 	orPanic(g.genesisDoc.SaveAs(homeDir + "/config/genesis.json"))
 }
 

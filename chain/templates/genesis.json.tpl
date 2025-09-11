@@ -188,6 +188,9 @@
       "grant_authorizations": [],
       "active_grants": []
     },
+    "downtimedetector": {
+      "last_block_time": "2025-08-26T00:00:00Z"
+    },
     "feegrant": {
       "allowances": []
     },

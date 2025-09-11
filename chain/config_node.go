@@ -45,14 +45,14 @@ type NodeConfig struct {
 }
 
 func (nodeConfig *NodeConfig) Save(homeDir string) {
-	orPanic(os.MkdirAll(homeDir+"/config", 0o700))
+	orPanic(os.MkdirAll(homeDir+"/config", 0o755))
 
 	orPanic((&p2p.NodeKey{
 		PrivKey: nodeConfig.NodeKey,
 	}).SaveAs(homeDir + "/config/node_key.json"))
 
 	if nodeConfig.ValidatorKey != nil {
-		orPanic(os.MkdirAll(homeDir+"/data", 0o700))
+		orPanic(os.MkdirAll(homeDir+"/data", 0o755))
 
 		privval.NewFilePV(
 			nodeConfig.ValidatorKey,
@@ -67,7 +67,7 @@ func (nodeConfig *NodeConfig) Save(homeDir string) {
 		buf := new(bytes.Buffer)
 		tpl := template.Must(template.New("config_prod").Parse(string(configProdTplTOML)))
 		orPanic(tpl.Execute(buf, nodeConfig))
-		orPanic(os.WriteFile(homeDir+"/config/config.toml", buf.Bytes(), 0o600))
+		orPanic(os.WriteFile(homeDir+"/config/config.toml", buf.Bytes(), 0o644))
 		return
 	}
 

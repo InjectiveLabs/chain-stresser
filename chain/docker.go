@@ -47,5 +47,5 @@ func GenerateDockerCompose(
 	buf := new(bytes.Buffer)
 	tpl := template.Must(template.New("docker-compose").Parse(string(dockerComposeTpl)))
 	orPanic(tpl.Execute(buf, cfg))
-	orPanic(os.WriteFile(outDir+"/docker-compose.yml", buf.Bytes(), 0o600))
+	orPanic(os.WriteFile(outDir+"/docker-compose.yml", buf.Bytes(), 0o644))
 }

@@ -20,7 +20,7 @@ type AppConfig struct {
 }
 
 func (appConfig *AppConfig) Save(homeDir string) {
-	orPanic(os.MkdirAll(homeDir+"/config", 0o700))
+	orPanic(os.MkdirAll(homeDir+"/config", 0o755))
 
 	if len(appConfig.MinimumGasPrices) == 0 {
 		appConfig.MinimumGasPrices = "0" + DefaultBondDenom
@@ -39,7 +39,7 @@ func (appConfig *AppConfig) Save(homeDir string) {
 		orPanic(tpl.Execute(buf, appConfig))
 	}
 
-	orPanic(os.WriteFile(homeDir+"/config/app.toml", buf.Bytes(), 0o600))
+	orPanic(os.WriteFile(homeDir+"/config/app.toml", buf.Bytes(), 0o644))
 }
 
 var (
