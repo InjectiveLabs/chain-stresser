@@ -18,6 +18,7 @@ import (
 
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 	"github.com/InjectiveLabs/chain-stresser/v2/payload"
+	"github.com/InjectiveLabs/chain-stresser/v2/replay"
 )
 
 // StressConfig is the config for stress runner
@@ -45,11 +46,113 @@ type StressConfig struct {
 
 	// AwaitTxConfirmation to wait for transaction to be included in a block
 	AwaitTxConfirmation bool
+
+	// GasFuzzing configuration for gas value fuzzing during replay
+	GasFuzzing replay.GasFuzzingConfig
 }
 
 // maxParallelInitialTxsBroadcasts is the maximum number of initial txs to broadcast in parallel.
 // this is internal to the stresser and not configurable for now.
 const maxParallelInitialTxsBroadcasts = 8
+
+// handleFallbackBroadcast attempts to broadcast the original transaction when fuzzed transaction fails
+func handleFallbackBroadcast(
+	ctx context.Context,
+	originalTxBytes []byte,
+	accountClient chain.Client,
+	config StressConfig,
+	fuzzedError string,
+	logger log.Logger,
+) (txHash string, err error, wasSuccessful bool) {
+	logger.WithFields(log.Fields{
+		"fuzzed_error": fuzzedError,
+	}).Debug("🔄 Fuzzed transaction failed with out of gas error, retrying with original")
+
+	fallbackTxHash, fallbackErr := accountClient.Broadcast(ctx, originalTxBytes, config.AwaitTxConfirmation)
+	if fallbackErr != nil {
+		logger.WithFields(log.Fields{
+			"fuzzed_error":   fuzzedError,
+			"original_error": fallbackErr.Error(),
+		}).Debug("🚫 Both fuzzed and original transactions failed")
+		return "", fallbackErr, false
+	}
+
+	if fallbackTxHash == "" {
+		return "", fmt.Errorf("fallback transaction returned empty hash"), false
+	}
+
+	logger.WithFields(log.Fields{
+		"original_tx_hash": fallbackTxHash,
+	}).Debug("✅ Original transaction succeeded after fuzzed failure")
+	return fallbackTxHash, nil, true
+}
+
+// categorizeError categorizes broadcast errors into different types
+func categorizeError(errMsg string, timeoutErrors, sequenceErrors, outOfGasErrors, otherErrors *int, logger log.Logger) {
+	if strings.Contains(errMsg, "tx timeout height") {
+		*timeoutErrors++
+	} else if strings.Contains(errMsg, "account sequence mismatch") {
+		*sequenceErrors++
+	} else if strings.Contains(errMsg, "out of gas") {
+		*outOfGasErrors++
+	} else {
+		*otherErrors++
+	}
+}
+
+// fuzzTransactions applies gas fuzzing to a transaction if enabled
+func fuzzTransactions(
+	txBytes []byte,
+	gasFuzzer *replay.GasFuzzer,
+	accountClient chain.Client,
+	config StressConfig,
+	logger log.Logger,
+) ([]byte, bool) {
+	if gasFuzzer == nil {
+		return txBytes, false
+	}
+
+	var originalTxInfo, fuzzedTxInfo log.Fields
+
+	// Log original transaction details if verbose logging is enabled
+	if config.GasFuzzing.VerboseLogging {
+		originalTxInfo = replay.ExtractTransactionInfo(txBytes, accountClient, "ORIGINAL")
+		if originalTxInfo != nil {
+			logger.WithFields(originalTxInfo).Debug("📋 Transaction before fuzzing")
+		}
+	}
+
+	originalSize := len(txBytes)
+	fuzzedTxBytes, fuzzErr := gasFuzzer.FuzzTransaction(txBytes, accountClient)
+	if fuzzErr != nil {
+		logger.WithError(fuzzErr).Warning("Gas fuzzing failed, using original transaction")
+		return txBytes, false
+	}
+
+	// Check if transaction was actually modified
+	if len(fuzzedTxBytes) == originalSize && string(fuzzedTxBytes) == string(txBytes) {
+		return txBytes, false
+	}
+
+	// Log fuzzed transaction details if verbose logging is enabled
+	if config.GasFuzzing.VerboseLogging {
+		fuzzedTxInfo = replay.ExtractTransactionInfo(fuzzedTxBytes, accountClient, "FUZZED")
+		if fuzzedTxInfo != nil {
+			logger.WithFields(fuzzedTxInfo).Debug("🎯 Transaction after fuzzing")
+		}
+
+		// Log comparison
+		if originalTxInfo != nil && fuzzedTxInfo != nil {
+			logger.WithFields(log.Fields{
+				"gas_limit_change": fmt.Sprintf("%v → %v", originalTxInfo["gas_limit"], fuzzedTxInfo["gas_limit"]),
+				"tx_hash_change":   fmt.Sprintf("%v → %v", originalTxInfo["tx_hash"], fuzzedTxInfo["tx_hash"]),
+				"strategy":         config.GasFuzzing.Strategy,
+			}).Debug("🔥 Gas limit fuzzing applied successfully")
+		}
+	}
+
+	return fuzzedTxBytes, true
+}
 
 func Stress(
 	ctx context.Context,
@@ -342,6 +445,18 @@ func StressReplay(
 	accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
 
+	// Initialize gas fuzzer if enabled
+	gasFuzzer := replay.NewGasFuzzer(config.GasFuzzing)
+	if gasFuzzer != nil {
+		logger.WithFields(log.Fields{
+			"fuzzing_enabled":          true,
+			"fuzzing_strategy":         config.GasFuzzing.Strategy,
+			"fuzz_percentage":          config.GasFuzzing.FuzzPercentage,
+			"gas_limit_multiplier_min": config.GasFuzzing.GasLimitMultiplierMin,
+			"gas_limit_multiplier_max": config.GasFuzzing.GasLimitMultiplierMax,
+		}).Info("Gas limit fuzzing enabled for transaction replay")
+	}
+
 	// Use block-based replay to maintain original block boundaries
 	if blockProvider, ok := txProvider.(interface{ GetNextBlockTxs() ([]payload.Tx, error) }); ok {
 		logger.Info("Using block-based replay that maintains original block boundaries")
@@ -370,38 +485,75 @@ func StressReplay(
 			successCount := 0
 			timeoutErrors := 0
 			sequenceErrors := 0
+			outOfGasErrors := 0
 			otherErrors := 0
+			fuzzedCount := 0
+			fallbackCount := 0
 
 			for _, tx := range txBatch {
-				txBytes := tx.Bytes()
+				originalTxBytes := tx.Bytes()
+				txBytes := originalTxBytes
+				wasFuzzed := false
+
+				// Apply gas fuzzing if enabled
+				if gasFuzzer != nil {
+					txBytes, wasFuzzed = fuzzTransactions(txBytes, gasFuzzer, accountClient, config, logger)
+					if wasFuzzed {
+						fuzzedCount++
+					}
+				}
 
 				txHash, err := accountClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+
+				// Handle broadcast result
 				if err != nil {
 					errMsg := err.Error()
-					if strings.Contains(errMsg, "tx timeout height") {
-						timeoutErrors++
-					} else if strings.Contains(errMsg, "account sequence mismatch") {
-						sequenceErrors++
+					// Record error for fuzzed transactions
+					categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
+
+					// Try fallback for fuzzed transactions that fail with insufficient fee
+					if wasFuzzed && strings.Contains(errMsg, "out of gas") {
+						fallbackHash, fallbackErr, fallbackSuccess := handleFallbackBroadcast(
+							ctx, originalTxBytes, accountClient, config, errMsg, logger)
+
+						if fallbackSuccess {
+							successCount++
+							fallbackCount++
+							broadcastTxPace.Step(1)
+							txHash = fallbackHash
+						} else {
+							categorizeError(fallbackErr.Error(), &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
+						}
 					} else {
-						otherErrors++
+						categorizeError(errMsg, &timeoutErrors, &sequenceErrors, &outOfGasErrors, &otherErrors, logger)
 					}
+				} else if txHash == "" {
+					otherErrors++
 				} else {
-					if txHash == "" {
-						otherErrors++
-					} else {
-						successCount++
-						broadcastTxPace.Step(1)
-					}
+					successCount++
+					broadcastTxPace.Step(1)
 				}
 			}
 
-			logger.WithFields(log.Fields{
+			logFields := log.Fields{
 				"total":           len(txBatch),
 				"success":         successCount,
 				"timeout_errors":  timeoutErrors,
 				"sequence_errors": sequenceErrors,
+				"out_of_gas_errors":  outOfGasErrors,
 				"other_errors":    otherErrors,
-			}).Info("Block broadcast summary")
+			}
+
+			if gasFuzzer != nil {
+				logFields["fuzzed_transactions"] = fuzzedCount
+				logFields["fuzz_rate"] = fmt.Sprintf("%.1f%%", float64(fuzzedCount)/float64(len(txBatch))*100)
+				if fallbackCount > 0 {
+					logFields["fallback_successes"] = fallbackCount
+					logFields["fallback_rate"] = fmt.Sprintf("%.1f%%", float64(fallbackCount)/float64(fuzzedCount)*100)
+				}
+			}
+
+			logger.WithFields(logFields).Info("Block broadcast summary")
 		}
 	}
 
