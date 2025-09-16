@@ -157,7 +157,7 @@ chain-stresser tx-eth-call \
 - Each transaction must pass **all three checks**: TPS, bytes, and gas
 - If TPS limit allows 100 tx/sec but gas limit only allows 50 tx/sec worth of gas → **gas limit wins** (50 tx/sec)
 - If bytes limit allows 10 tx/sec but TPS allows 100 tx/sec → **bytes limit wins** (10 tx/sec)
-- The **most restrictive limit** determines the actual throughput
+- The **most restrictive limit** determines the actual throughput and they are all optional (default 0, defines no limit).
 
 **Example:** Bank sends use ~150K gas and ~500 bytes each:
 ```bash
