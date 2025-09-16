@@ -14,6 +14,9 @@ type Config struct {
 	// BytesPerSecond limits the transaction bytes processed per second
 	BytesPerSecond uint64 `yaml:"bytes_per_second,omitempty" json:"bytes_per_second,omitempty"`
 
+	// GasPerSecond limits the gas units processed per second
+	GasPerSecond uint64 `yaml:"gas_per_second,omitempty" json:"gas_per_second,omitempty"`
+
 	// Burst configuration
 	Burst BurstConfig `yaml:"burst" json:"burst"`
 }
@@ -29,7 +32,7 @@ type BurstConfig struct {
 
 // IsEnabled returns true if any rate limiting is configured
 func (c *Config) IsEnabled() bool {
-	return c.TxPerSecond > 0 || c.BytesPerSecond > 0
+	return c.TxPerSecond > 0 || c.BytesPerSecond > 0 || c.GasPerSecond > 0
 }
 
 // Validate checks if the configuration is valid
@@ -38,7 +41,7 @@ func (c *Config) Validate() error {
 		return nil
 	}
 
-	if c.TxPerSecond == 0 && c.BytesPerSecond == 0 {
+	if c.TxPerSecond == 0 && c.BytesPerSecond == 0 && c.GasPerSecond == 0 {
 		return ErrAtLeastOneRateLimitRequired
 	}
 
@@ -59,6 +62,11 @@ func (c *Config) HasBytesLimit() bool {
 	return c.IsEnabled() && c.BytesPerSecond > 0
 }
 
+// HasGasLimit returns true if gas rate limiting is configured
+func (c *Config) HasGasLimit() bool {
+	return c.IsEnabled() && c.GasPerSecond > 0
+}
+
 // GetTxRate returns the transaction rate
 func (c *Config) GetTxRate() float64 {
 	return c.TxPerSecond
@@ -67,6 +75,11 @@ func (c *Config) GetTxRate() float64 {
 // GetBytesRate returns the bytes rate
 func (c *Config) GetBytesRate() float64 {
 	return float64(c.BytesPerSecond)
+}
+
+// GetGasRate returns the gas rate
+func (c *Config) GetGasRate() float64 {
+	return float64(c.GasPerSecond)
 }
 
 // GetTpsBurstSize returns burst size specifically for TPS limiting
@@ -88,6 +101,23 @@ func (c *Config) GetBytesBurstSize() int {
 	}
 	// Saturating cast to int
 	b := c.BytesPerSecond * uint64(DefaultBurstMultiplier)
+	maxInt := int(^uint(0) >> 1)
+	if b == 0 {
+		return 1
+	}
+	if b > uint64(maxInt) {
+		return maxInt
+	}
+	return int(b)
+}
+
+// GetGasBurstSize returns burst size specifically for gas limiting
+func (c *Config) GetGasBurstSize() int {
+	if c.Burst.Size > 0 {
+		return c.Burst.Size
+	}
+	// Saturating cast to int
+	b := c.GasPerSecond * uint64(DefaultBurstMultiplier)
 	maxInt := int(^uint(0) >> 1)
 	if b == 0 {
 		return 1

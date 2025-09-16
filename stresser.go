@@ -381,7 +381,12 @@ func Stress(
 			return baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
 		}
 	} else if config.RateLimit.IsEnabled() {
-		logger.Info("✅ Rate limiter enabled")
+		logger.WithFields(log.Fields{
+			"tps_limit":        config.RateLimit.TxPerSecond,
+			"bytes_per_second": config.RateLimit.BytesPerSecond,
+			"gas_per_second":   config.RateLimit.GasPerSecond,
+			"burst_size":       config.RateLimit.Burst.Size,
+		}).Info("✅ Rate limiter enabled")
 	}
 
 	if err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
@@ -465,7 +470,13 @@ func StressReplay(
 	}
 
 	if config.RateLimit.IsEnabled() {
-		logger.Info("✅ Rate limiter enabled for replay")
+		logger.WithFields(log.Fields{
+			"tps_limit":        config.RateLimit.TxPerSecond,
+			"bytes_per_second": config.RateLimit.BytesPerSecond,
+			"gas_per_second":   config.RateLimit.GasPerSecond,
+			"burst_size":       config.RateLimit.Burst.Size,
+		}).Info("✅ Rate limiter enabled for replay")
+
 	}
 
 	// Create client for gas fuzzing (separate from broadcast function)
@@ -731,27 +742,24 @@ func createAndBroadcastInitialTxs(
 
 // buildBroadcastFunc creates a broadcast function with optional rate limiting
 func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) {
+	// Create shared client for all accounts
+	baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+
 	// Create rate limiter if enabled
 	var rateLimiter *ratelimit.MultiLimiter
 	if config.RateLimit.IsEnabled() {
-		limiter, err := ratelimit.NewMultiLimiter(config.RateLimit)
+		limiter, err := ratelimit.NewMultiLimiter(config.RateLimit, baseClient.TxConfig())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create rate limiter: %w", err)
 		}
 		rateLimiter = limiter
 	}
 
-	// Create shared client for all accounts
-	baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
-
 	// Return broadcast function with rate limiting
 	return func(ctx context.Context, txBytes []byte) (string, error) {
 		// Apply rate limiting if enabled
 		if rateLimiter != nil {
-			txMetrics := ratelimit.TxMetrics{
-				SizeBytes: uint64(len(txBytes)),
-			}
-			if err := rateLimiter.WaitForTransaction(ctx, txMetrics); err != nil {
+			if err := rateLimiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
 				return "", fmt.Errorf("rate limit wait failed: %w", err)
 			}
 		}

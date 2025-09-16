@@ -5,6 +5,14 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/std"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/tx"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 )
 
 func TestLimiter(t *testing.T) {
@@ -92,7 +100,7 @@ func TestMultiLimiter(t *testing.T) {
 			},
 		}
 
-		limiter, err := NewMultiLimiter(config)
+		limiter, err := NewMultiLimiter(config, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +125,7 @@ func TestMultiLimiter(t *testing.T) {
 			// Let burst size auto-calculate (default multiplier applied)
 		}
 
-		limiter, err := NewMultiLimiter(config)
+		limiter, err := NewMultiLimiter(config, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +148,7 @@ func TestMultiLimiter(t *testing.T) {
 	t.Run("NewMultiLimiter with no limits", func(t *testing.T) {
 		config := Config{} // No limits configured
 
-		limiter, err := NewMultiLimiter(config)
+		limiter, err := NewMultiLimiter(config, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -176,6 +184,94 @@ func TestPerformanceBasic(t *testing.T) {
 		elapsed := time.Since(start)
 		if elapsed > 500*time.Millisecond {
 			t.Errorf("Performance test took too long: %v", elapsed)
+		}
+	})
+}
+
+func TestMultiLimiter_GasLimiting(t *testing.T) {
+	// Setup a basic tx config for testing
+	interfaceRegistry := types.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	banktypes.RegisterInterfaces(interfaceRegistry)
+
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	txConfig := tx.NewTxConfig(marshaler, tx.DefaultSignModes)
+
+	config := Config{
+		GasPerSecond: 100, // Allow 100 gas units per second
+		Burst: BurstConfig{
+			Size: 50, // Burst of 50 gas units
+		},
+	}
+
+	limiter, err := NewMultiLimiter(config, txConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("Gas limiting with transaction bytes", func(t *testing.T) {
+		// Create a transaction with known gas limit
+		txBuilder := txConfig.NewTxBuilder()
+
+		msg := banktypes.NewMsgSend(
+			sdk.AccAddress("sender"),
+			sdk.AccAddress("recipient"),
+			sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(100))),
+		)
+
+		txBuilder.SetMsgs(msg)
+		txBuilder.SetGasLimit(30) // Set gas limit to 30
+		txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(10))))
+
+		// Encode the transaction
+		txBytes, err := txConfig.TxEncoder()(txBuilder.GetTx())
+		if err != nil {
+			t.Fatalf("Failed to encode transaction: %v", err)
+		}
+
+		ctx := context.Background()
+
+		// First transaction should succeed (30 gas units)
+		start := time.Now()
+		if err := limiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
+			t.Errorf("First transaction failed: %v", err)
+		}
+
+		// Second transaction should also succeed (total 60 gas units)
+		if err := limiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
+			t.Errorf("Second transaction failed: %v", err)
+		}
+
+		// Third transaction should be rate limited (would be 90 gas units)
+		if err := limiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
+			t.Errorf("Third transaction failed: %v", err)
+		}
+
+		elapsed := time.Since(start)
+		// Should take some time due to rate limiting
+		if elapsed < 100*time.Millisecond {
+			t.Errorf("Expected some delay due to rate limiting, but took only %v", elapsed)
+		}
+	})
+
+	t.Run("Gas limiting with manual metrics", func(t *testing.T) {
+		ctx := context.Background()
+
+		// High gas transaction should be rate limited
+		highGasMetrics := TxMetrics{
+			SizeBytes: 1000,
+			GasLimit:  200, // Exceeds our 100 gas/sec limit
+		}
+
+		start := time.Now()
+		if err := limiter.WaitForTransaction(ctx, highGasMetrics); err != nil {
+			t.Errorf("High gas transaction failed: %v", err)
+		}
+		elapsed := time.Since(start)
+
+		// Should take at least 1 second due to rate limiting (200 gas at 100 gas/sec)
+		if elapsed < 1*time.Second {
+			t.Errorf("Expected significant delay for high gas transaction, but took only %v", elapsed)
 		}
 	})
 }

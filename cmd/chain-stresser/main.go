@@ -90,6 +90,7 @@ func main() {
 	// Rate limiting flags
 	rootCmd.PersistentFlags().Float64Var(&stressCfg.RateLimit.TxPerSecond, "rate-tps", 0, "Rate limit transactions per second. Example: 200 for 200 TPS, 99.5 for fractional rates. 0 = no limit.")
 	rootCmd.PersistentFlags().Uint64Var(&stressCfg.RateLimit.BytesPerSecond, "rate-bytes", 0, "Rate limit transaction bandwidth in bytes per second. Example: 50000 for 50KB/sec. 0 = no limit.")
+	rootCmd.PersistentFlags().Uint64Var(&stressCfg.RateLimit.GasPerSecond, "rate-gas", 0, "Rate limit gas consumption per second. Example: 1000000 for 1M gas/sec. 0 = no limit.")
 	rootCmd.PersistentFlags().IntVar(&stressCfg.RateLimit.Burst.Size, "rate-burst-size", 0, "Custom burst size (tokens). If >0, overrides default burst calculation. 0 = auto.")
 
 	rootCmd.SetHelpCommand(&cobra.Command{

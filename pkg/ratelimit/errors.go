@@ -24,4 +24,7 @@ var (
 
 	// ErrBytesRateLimitExceeded indicates bytes rate limit was hit
 	ErrBytesRateLimitExceeded = errors.New("bytes rate limit exceeded")
+
+	// ErrGasRateLimitExceeded indicates gas rate limit was hit
+	ErrGasRateLimitExceeded = errors.New("gas rate limit exceeded")
 )

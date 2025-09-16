@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/client"
 	"golang.org/x/time/rate"
 )
 
@@ -59,18 +60,24 @@ func (l *limiter) SetRate(ratePerSecond float64) error {
 // TxMetrics represents transaction metrics for rate limiting
 type TxMetrics struct {
 	SizeBytes uint64 // Transaction size in bytes
+	GasLimit  uint64 // Gas limit for the transaction
 }
 
 // MultiLimiter wraps multiple types of rate limits
 type MultiLimiter struct {
 	tpsLimiter   Limiter
 	bytesLimiter Limiter
+	gasLimiter   Limiter
+	txConfig     client.TxConfig // For decoding transactions to extract gas
 	config       Config
 }
 
 // NewMultiLimiter creates a multi-metric rate limiter
-func NewMultiLimiter(config Config) (*MultiLimiter, error) {
-	ml := &MultiLimiter{config: config}
+func NewMultiLimiter(config Config, txConfig client.TxConfig) (*MultiLimiter, error) {
+	ml := &MultiLimiter{
+		config:   config,
+		txConfig: txConfig,
+	}
 
 	if config.TxPerSecond > 0 {
 		tpsLimiter, err := NewLimiter(config.TxPerSecond, config.GetTpsBurstSize())
@@ -88,7 +95,32 @@ func NewMultiLimiter(config Config) (*MultiLimiter, error) {
 		ml.bytesLimiter = bytesLimiter
 	}
 
+	if config.GasPerSecond > 0 {
+		gasLimiter, err := NewLimiter(config.GetGasRate(), config.GetGasBurstSize())
+		if err != nil {
+			return nil, err
+		}
+		ml.gasLimiter = gasLimiter
+	}
+
 	return ml, nil
+}
+
+// WaitForTransactionBytes applies all configured rate limits for a transaction by decoding the bytes
+func (ml *MultiLimiter) WaitForTransactionBytes(ctx context.Context, txBytes []byte) error {
+	// Extract gas limit from transaction bytes
+	gasLimit, err := ExtractGasLimit(ml.txConfig, txBytes)
+	if err != nil {
+		// If we can't extract gas, just use 0 and continue with other limits
+		gasLimit = 0
+	}
+
+	metrics := TxMetrics{
+		SizeBytes: uint64(len(txBytes)),
+		GasLimit:  gasLimit,
+	}
+
+	return ml.WaitForTransaction(ctx, metrics)
 }
 
 // WaitForTransaction applies all configured rate limits for a transaction
@@ -118,6 +150,26 @@ func (ml *MultiLimiter) WaitForTransaction(ctx context.Context, txMetrics TxMetr
 					return err
 				}
 				return fmt.Errorf("%w: %w", ErrBytesRateLimitExceeded, err)
+			}
+			remaining -= uint64(n)
+		}
+	}
+
+	// Apply Gas limiting (N tokens based on actual gas limit)
+	if ml.gasLimiter != nil && txMetrics.GasLimit > 0 {
+		// Consume in chunks ≤ configured burst to avoid WaitN(n>burst) errors.
+		remaining := txMetrics.GasLimit
+		chunk := ml.config.GetGasBurstSize()
+		for remaining > 0 {
+			n := chunk
+			if remaining < uint64(chunk) {
+				n = int(remaining)
+			}
+			if err := ml.gasLimiter.Wait(ctx, n); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
+				return fmt.Errorf("%w: %w", ErrGasRateLimitExceeded, err)
 			}
 			remaining -= uint64(n)
 		}
