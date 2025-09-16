@@ -1,5 +1,7 @@
 package ratelimit
 
+import "math"
+
 // DefaultBurstMultiplier defines how many seconds worth of tokens to allow,
 // ensuring burst respects the specified rate limit without exceeding it.
 const DefaultBurstMultiplier = 1
@@ -72,7 +74,11 @@ func (c *Config) GetTpsBurstSize() int {
 	if c.Burst.Size > 0 {
 		return c.Burst.Size
 	}
-	return int(c.TxPerSecond * DefaultBurstMultiplier)
+	v := int(math.Ceil(c.TxPerSecond * float64(DefaultBurstMultiplier)))
+	if v < 1 {
+		return 1
+	}
+	return v
 }
 
 // GetBytesBurstSize returns burst size specifically for bytes limiting
@@ -80,5 +86,14 @@ func (c *Config) GetBytesBurstSize() int {
 	if c.Burst.Size > 0 {
 		return c.Burst.Size
 	}
-	return int(c.BytesPerSecond * DefaultBurstMultiplier)
+	// Saturating cast to int
+	b := c.BytesPerSecond * uint64(DefaultBurstMultiplier)
+	maxInt := int(^uint(0) >> 1)
+	if b == 0 {
+		return 1
+	}
+	if b > uint64(maxInt) {
+		return maxInt
+	}
+	return int(b)
 }

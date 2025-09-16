@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -95,14 +96,30 @@ func (ml *MultiLimiter) WaitForTransaction(ctx context.Context, txMetrics TxMetr
 	// Apply TPS limiting (1 token per transaction)
 	if ml.tpsLimiter != nil {
 		if err := ml.tpsLimiter.Wait(ctx, 1); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			return fmt.Errorf("%w: %w", ErrTPSRateLimitExceeded, err)
 		}
 	}
 
 	// Apply Bytes limiting (N tokens based on actual tx size)
 	if ml.bytesLimiter != nil && txMetrics.SizeBytes > 0 {
-		if err := ml.bytesLimiter.Wait(ctx, int(txMetrics.SizeBytes)); err != nil {
-			return fmt.Errorf("%w: %w", ErrBytesRateLimitExceeded, err)
+		// Consume in chunks ≤ configured burst to avoid WaitN(n>burst) errors.
+		remaining := txMetrics.SizeBytes
+		chunk := ml.config.GetBytesBurstSize()
+		for remaining > 0 {
+			n := chunk
+			if remaining < uint64(chunk) {
+				n = int(remaining)
+			}
+			if err := ml.bytesLimiter.Wait(ctx, n); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
+				return fmt.Errorf("%w: %w", ErrBytesRateLimitExceeded, err)
+			}
+			remaining -= uint64(n)
 		}
 	}
 
