@@ -102,3 +102,16 @@ func TestExtractGasLimit_InvalidTransaction(t *testing.T) {
 		t.Errorf("Expected 0 gas for invalid transaction, got %d", gas)
 	}
 }
+
+func TestExtractGasLimit_NilTxConfig(t *testing.T) {
+	// Test with nil txConfig should not panic and return 0 gas
+	validBytes := []byte("some transaction bytes")
+
+	gas, err := ExtractGasLimit(nil, validBytes)
+	if err != nil {
+		t.Errorf("Expected no error for nil txConfig, got: %v", err)
+	}
+	if gas != 0 {
+		t.Errorf("Expected 0 gas for nil txConfig, got %d", gas)
+	}
+}

@@ -9,6 +9,10 @@ import (
 // This works for both regular Cosmos transactions and Ethereum transactions
 // wrapped in MsgEthereumTx since they both become Cosmos SDK transactions.
 func ExtractGasLimit(txConfig client.TxConfig, txBytes []byte) (uint64, error) {
+	if txConfig == nil {
+		// No decoder provided; treat as unknown gas (0).
+		return 0, nil
+	}
 	tx, err := txConfig.TxDecoder()(txBytes)
 	if err != nil {
 		return 0, err
