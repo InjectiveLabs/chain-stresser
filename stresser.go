@@ -18,6 +18,7 @@ import (
 
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
 	"github.com/InjectiveLabs/chain-stresser/v2/payload"
+	"github.com/InjectiveLabs/chain-stresser/v2/pkg/ratelimit"
 	"github.com/InjectiveLabs/chain-stresser/v2/replay"
 )
 
@@ -49,6 +50,9 @@ type StressConfig struct {
 
 	// GasFuzzing configuration for gas value fuzzing during replay
 	GasFuzzing replay.GasFuzzingConfig
+
+	// RateLimit configuration for controlling transaction throughput
+	RateLimit ratelimit.Config
 }
 
 // maxParallelInitialTxsBroadcasts is the maximum number of initial txs to broadcast in parallel.
@@ -59,8 +63,7 @@ const maxParallelInitialTxsBroadcasts = 8
 func handleFallbackBroadcast(
 	ctx context.Context,
 	originalTxBytes []byte,
-	accountClient chain.Client,
-	config StressConfig,
+	broadcastFunc ratelimit.BroadcastFunc,
 	fuzzedError string,
 	logger log.Logger,
 ) (txHash string, err error, wasSuccessful bool) {
@@ -68,7 +71,7 @@ func handleFallbackBroadcast(
 		"fuzzed_error": fuzzedError,
 	}).Debug("🔄 Fuzzed transaction failed with out of gas error, retrying with original")
 
-	fallbackTxHash, fallbackErr := accountClient.Broadcast(ctx, originalTxBytes, config.AwaitTxConfirmation)
+	fallbackTxHash, fallbackErr := broadcastFunc(ctx, originalTxBytes)
 	if fallbackErr != nil {
 		logger.WithFields(log.Fields{
 			"fuzzed_error":   fuzzedError,
@@ -367,6 +370,25 @@ func Stress(
 	startTs = time.Now()
 
 	logger.Info("Broadcasting transactions 🚀")
+
+	// Create broadcast function with optional rate limiting
+	rateLimitedBroadcast, err := buildBroadcastClient(config)
+	if err != nil {
+		logger.WithError(err).Error("Failed to create broadcast function, falling back to unthrottled")
+		// Create fallback broadcast function without rate limiting
+		baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+		rateLimitedBroadcast = func(ctx context.Context, txBytes []byte) (string, error) {
+			return baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+		}
+	} else if config.RateLimit.IsEnabled() {
+		logger.WithFields(log.Fields{
+			"tps_limit":        config.RateLimit.TxPerSecond,
+			"bytes_per_second": config.RateLimit.BytesPerSecond,
+			"gas_per_second":   config.RateLimit.GasPerSecond,
+			"burst_size":       config.RateLimit.Burst.Size,
+		}).Info("✅ Rate limiter enabled")
+	}
+
 	if err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 		spawn("accounts", parallel.Exit, func(ctx context.Context) error {
 			return parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
@@ -375,7 +397,6 @@ func Stress(
 					accountIdx := accountIdx
 
 					initialSequence := initialAccountSequences[accountIdx]
-					accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 
 					spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
 						defer catcher.Catch(
@@ -386,7 +407,7 @@ func Stress(
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 							tx := accountTxs[txIndex]
 
-							txHash, err := accountClient.Broadcast(ctx, tx, config.AwaitTxConfirmation)
+							txHash, err := rateLimitedBroadcast(ctx, tx)
 							if err != nil {
 								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
 									logger.WithError(err).WithFields(log.Fields{
@@ -442,6 +463,23 @@ func StressReplay(
 ) error {
 	logger := log.WithField("bench", txProvider.Name())
 
+	// Create broadcast function with optional rate limiting
+	broadcastFunc, err := buildBroadcastClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create broadcast function: %w", err)
+	}
+
+	if config.RateLimit.IsEnabled() {
+		logger.WithFields(log.Fields{
+			"tps_limit":        config.RateLimit.TxPerSecond,
+			"bytes_per_second": config.RateLimit.BytesPerSecond,
+			"gas_per_second":   config.RateLimit.GasPerSecond,
+			"burst_size":       config.RateLimit.Burst.Size,
+		}).Info("✅ Rate limiter enabled for replay")
+
+	}
+
+	// Create client for gas fuzzing (separate from broadcast function)
 	accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
 
@@ -503,7 +541,7 @@ func StressReplay(
 					}
 				}
 
-				txHash, err := accountClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+				txHash, err := broadcastFunc(ctx, txBytes)
 
 				// Handle broadcast result
 				if err != nil {
@@ -514,7 +552,7 @@ func StressReplay(
 					// Try fallback for fuzzed transactions that fail with insufficient fee
 					if wasFuzzed && strings.Contains(errMsg, "out of gas") {
 						fallbackHash, fallbackErr, fallbackSuccess := handleFallbackBroadcast(
-							ctx, originalTxBytes, accountClient, config, errMsg, logger)
+							ctx, originalTxBytes, broadcastFunc, errMsg, logger)
 
 						if fallbackSuccess {
 							successCount++
@@ -536,12 +574,12 @@ func StressReplay(
 			}
 
 			logFields := log.Fields{
-				"total":           len(txBatch),
-				"success":         successCount,
-				"timeout_errors":  timeoutErrors,
-				"sequence_errors": sequenceErrors,
-				"out_of_gas_errors":  outOfGasErrors,
-				"other_errors":    otherErrors,
+				"total":             len(txBatch),
+				"success":           successCount,
+				"timeout_errors":    timeoutErrors,
+				"sequence_errors":   sequenceErrors,
+				"out_of_gas_errors": outOfGasErrors,
+				"other_errors":      otherErrors,
 			}
 
 			if gasFuzzer != nil {
@@ -700,4 +738,31 @@ func createAndBroadcastInitialTxs(
 	defer pool.StopWait()
 
 	return nil
+}
+
+// buildBroadcastFunc creates a broadcast function with optional rate limiting
+func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) {
+	// Create shared client for all accounts
+	baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+
+	// Create rate limiter if enabled
+	var rateLimiter *ratelimit.MultiLimiter
+	if config.RateLimit.IsEnabled() {
+		limiter, err := ratelimit.NewMultiLimiter(config.RateLimit, baseClient.TxConfig())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rate limiter: %w", err)
+		}
+		rateLimiter = limiter
+	}
+
+	// Return broadcast function with rate limiting
+	return func(ctx context.Context, txBytes []byte) (string, error) {
+		// Apply rate limiting if enabled
+		if rateLimiter != nil {
+			if err := rateLimiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
+				return "", fmt.Errorf("rate limit wait failed: %w", err)
+			}
+		}
+		return baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+	}, nil
 }

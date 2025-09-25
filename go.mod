@@ -21,7 +21,6 @@ require (
 	github.com/xlab/closer v1.1.0
 	github.com/xlab/pace v1.1.0
 	github.com/xlab/suplog v1.4.4
-	github.com/ybbus/jsonrpc/v3 v3.1.6
 	google.golang.org/grpc v1.71.0
 )
 
