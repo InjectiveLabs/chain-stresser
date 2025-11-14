@@ -487,12 +487,16 @@ func main() {
 				return errors.New("--config is required")
 			}
 
-			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
-
 			mixedCfg, err := payload.LoadMixedPayloadConfig(mixedPayloadConfigPath)
 			if err != nil {
 				return errors.Wrap(err, "failed to load mixed payload config")
 			}
+
+			if err := applyStresserConfigFromYAML(&stressCfg, mixedCfg.StresserConfig, cmd); err != nil {
+				return errors.Wrap(err, "failed to apply stresser config from YAML")
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
 
 			queryClient := chain.NewClient(
 				stressCfg.ChainID,
@@ -649,4 +653,60 @@ func strOrPanic(out string, err error) string {
 	}
 
 	return out
+}
+
+func applyStresserConfigFromYAML(
+	stressCfg *stresser.StressConfig,
+	yamlCfg *payload.StresserConfig,
+	cmd *cobra.Command,
+) error {
+	if yamlCfg == nil {
+		return nil
+	}
+
+	if yamlCfg.ChainID != "" && !cmd.Flags().Changed("chain-id") {
+		stressCfg.ChainID = yamlCfg.ChainID
+	}
+
+	if yamlCfg.EthChainID != 0 && !cmd.Flags().Changed("eth-chain-id") {
+		stressCfg.EthChainID = yamlCfg.EthChainID
+	}
+
+	if yamlCfg.MinGasPrice != "" && !cmd.Flags().Changed("min-gas-price") {
+		stressCfg.MinGasPrice = yamlCfg.MinGasPrice
+	}
+
+	if yamlCfg.NodeAddress != "" && !cmd.Flags().Changed("node-addr") {
+		stressCfg.NodeAddress = yamlCfg.NodeAddress
+	}
+
+	if yamlCfg.GRPCAddress != "" && !cmd.Flags().Changed("grpc-addr") {
+		stressCfg.GRPCAddress = yamlCfg.GRPCAddress
+	}
+
+	if yamlCfg.AwaitTxConfirmation != nil && !cmd.Flags().Changed("await") {
+		stressCfg.AwaitTxConfirmation = *yamlCfg.AwaitTxConfirmation
+	}
+
+	if yamlCfg.NumOfTransactions != 0 && !cmd.Flags().Changed("transactions") {
+		stressCfg.NumOfTransactions = yamlCfg.NumOfTransactions
+	}
+
+	if yamlCfg.RateTPS != 0 && !cmd.Flags().Changed("rate-tps") {
+		stressCfg.RateLimit.TxPerSecond = yamlCfg.RateTPS
+	}
+
+	if yamlCfg.RateBytes != 0 && !cmd.Flags().Changed("rate-bytes") {
+		stressCfg.RateLimit.BytesPerSecond = yamlCfg.RateBytes
+	}
+
+	if yamlCfg.RateGas != 0 && !cmd.Flags().Changed("rate-gas") {
+		stressCfg.RateLimit.GasPerSecond = yamlCfg.RateGas
+	}
+
+	if yamlCfg.RateBurstSize != 0 && !cmd.Flags().Changed("rate-burst-size") {
+		stressCfg.RateLimit.Burst.Size = yamlCfg.RateBurstSize
+	}
+
+	return nil
 }

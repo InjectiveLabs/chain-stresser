@@ -68,6 +68,21 @@ Create a YAML config file defining which payload types to use and their relative
 
 ```yaml
 # example-mixed.yaml
+
+# Global configuration (optional) - CLI flags override these values
+stresser_config:
+  chain_id: "stressinj-1337"
+  eth_chain_id: 1337
+  min_gas_price: "1inj"
+  node_addr: "127.0.0.1:26657"
+  grpc_addr: "127.0.0.1:9900"
+  await: true
+  transactions: 100
+  rate_tps: 100         # Limit to 100 TPS
+  rate_bytes: 0         # 0 = no limit
+  rate_gas: 5000000     # Gas limit per second
+
+# Payload configurations
 bank_send:
   frequency: 0.5        # 50% of transactions
   send_amount: "1inj"
@@ -80,8 +95,12 @@ eth_call:
   frequency: 0.2        # 20% of transactions
 ```
 
-**Frequency Distribution:**
+**Configuration Precedence:**
+1. Command-line flags (highest priority)
+2. YAML `stresser_config` values
+3. Default values (lowest priority)
 
+**Frequency Distribution:**
 - Frequencies are normalized automatically (0.5 + 0.3 + 0.2 = equal to 50% + 30% + 20%)
 - Use any scale: `0.5, 0.5` or `1.0, 1.0` both produce 50/50 distribution
 - Only payloads with `frequency > 0` are included

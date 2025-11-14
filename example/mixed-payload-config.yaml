@@ -2,6 +2,21 @@
 # Configure multiple payload types with frequency distribution (0.0 - 1.0)
 # Frequencies are normalized, so 0.5 + 0.5 = equal distribution
 
+# Global stresser configuration (optional)
+# These values are used as defaults and can be overridden by command-line flags
+stresser_config:
+  chain_id: "stressinj-1337"
+  eth_chain_id: 1337
+  min_gas_price: "1inj"
+  node_addr: "127.0.0.1:26657"
+  grpc_addr: "127.0.0.1:9900"
+  await: true
+  transactions: 100
+  rate_tps: 0        # 0 = no limit
+  rate_bytes: 0      # 0 = no limit
+  rate_gas: 0        # 0 = no limit
+  rate_burst_size: 0 # 0 = auto
+
 # Bank Send transactions
 bank_send:
   frequency: 0.3

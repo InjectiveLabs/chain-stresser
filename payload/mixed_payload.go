@@ -13,6 +13,7 @@ import (
 )
 
 type MixedPayloadConfig struct {
+	StresserConfig      *StresserConfig            `yaml:"stresser_config,omitempty"`
 	BankSend            *BankSendConfig            `yaml:"bank_send,omitempty"`
 	BankMultiSend       *BankMultiSendConfig       `yaml:"bank_multi_send,omitempty"`
 	EthSend             *EthSendConfig             `yaml:"eth_send,omitempty"`
@@ -22,6 +23,20 @@ type MixedPayloadConfig struct {
 	WasmStoreCode       *WasmStoreCodeConfig       `yaml:"wasm_store_code,omitempty"`
 	WasmInitContract    *WasmInitContractConfig    `yaml:"wasm_init_contract,omitempty"`
 	WasmExecContract    *WasmExecContractConfig    `yaml:"wasm_exec_contract,omitempty"`
+}
+
+type StresserConfig struct {
+	ChainID             string  `yaml:"chain_id,omitempty"`
+	EthChainID          int64   `yaml:"eth_chain_id,omitempty"`
+	MinGasPrice         string  `yaml:"min_gas_price,omitempty"`
+	NodeAddress         string  `yaml:"node_addr,omitempty"`
+	GRPCAddress         string  `yaml:"grpc_addr,omitempty"`
+	AwaitTxConfirmation *bool   `yaml:"await,omitempty"`
+	NumOfTransactions   int     `yaml:"transactions,omitempty"`
+	RateTPS             float64 `yaml:"rate_tps,omitempty"`
+	RateBytes           uint64  `yaml:"rate_bytes,omitempty"`
+	RateGas             uint64  `yaml:"rate_gas,omitempty"`
+	RateBurstSize       int     `yaml:"rate_burst_size,omitempty"`
 }
 
 type BankSendConfig struct {
