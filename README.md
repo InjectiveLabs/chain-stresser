@@ -58,12 +58,117 @@ Run a stress test against this node (in separate tab):
 chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accounts.json
 ```
 
+## Mixed Payload Configuration
+
+Run stress tests with multiple transaction types simultaneously, each with configurable frequency distribution. This allows realistic workload simulation that mirrors production traffic patterns.
+
+### Configuration
+
+Create a YAML config file defining which payload types to use and their relative frequencies:
+
+```yaml
+# example-mixed.yaml
+bank_send:
+  frequency: 0.5        # 50% of transactions
+  send_amount: "1inj"
+
+eth_send:
+  frequency: 0.3        # 30% of transactions
+  send_amount: "1inj"
+
+eth_call:
+  frequency: 0.2        # 20% of transactions
+```
+
+**Frequency Distribution:**
+
+- Frequencies are normalized automatically (0.5 + 0.3 + 0.2 = equal to 50% + 30% + 20%)
+- Use any scale: `0.5, 0.5` or `1.0, 1.0` both produce 50/50 distribution
+- Only payloads with `frequency > 0` are included
+
+### Supported Payload Types
+
+| Payload Type | Config Key | Additional Options |
+|--------------|------------|-------------------|
+| Bank Send | `bank_send` | `send_amount` |
+| Bank Multi Send | `bank_multi_send` | `send_amount`, `num_targets` |
+| ETH Send | `eth_send` | `send_amount` |
+| ETH Call | `eth_call` | - |
+| ETH Deploy | `eth_deploy` | - |
+| Exchange Batch Orders | `exchange_batch_orders` | `spot_market_ids`, `derivative_market_ids` |
+| WASM Store Code | `wasm_store_code` | - |
+| WASM Init Contract | `wasm_init_contract` | - |
+| WASM Exec Contract | `wasm_exec_contract` | - |
+
+### Usage
+
+```bash
+# Run with mixed payload configuration
+chain-stresser tx-mixed-payload \
+  --config ./example/mixed-payload-config.yaml \
+  --accounts ./chain-stresser-deploy/instances/0/accounts.json \
+  --accounts-num 100 \
+  --transactions 50
+
+# With rate limiting
+chain-stresser tx-mixed-payload \
+  --config ./mixed.yaml \
+  --accounts ./accounts.json \
+  --rate-tps 100 \
+  --rate-gas 5000000
+
+# Verbose output for debugging
+chain-stresser tx-mixed-payload \
+  --config ./mixed.yaml \
+  --accounts ./accounts.json \
+  --verbose
+```
+
+### Example Configurations
+
+**Balanced Web3 Workload:**
+
+```yaml
+bank_send:
+  frequency: 0.4
+eth_send:
+  frequency: 0.3
+eth_call:
+  frequency: 0.3
+```
+
+**Exchange-focused Workload:**
+
+```yaml
+exchange_batch_orders:
+  frequency: 0.7
+  spot_market_ids: ["0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"]
+bank_send:
+  frequency: 0.2
+eth_send:
+  frequency: 0.1
+```
+
+See [example/mixed-payload-config.yaml](./example/mixed-payload-config.yaml) for a complete configuration template.
+
+### Global Flags
+
+All global flags from individual commands are supported:
+
+- `--chain-id`, `--eth-chain-id`
+- `--node-addr`, `--grpc-addr`
+- `--min-gas-price`
+- `--await` (transaction confirmation)
+- `--rate-tps`, `--rate-bytes`, `--rate-gas` (see Rate Limiting section)
+- `--verbose` (debug output)
+
 ## Rate Limiting (Optional)
 
 Control the stress test intensity with built-in rate limiting. You can limit by transactions per second, bandwidth, or gas consumption.
 
 **Load Generation Pipeline:**
-1. **`--accounts-num`** and **`--transactions`** control the total load generated (pipeline capacity)
+
+1. `--accounts-num` and `--transactions` control the total load generated (pipeline capacity)
 2. **Rate limits** act as "nozzles" controlling how fast that load flows through
 
 **Example:** 100 accounts × 50 transactions = 5,000 total transactions → rate limiting controls delivery speed
@@ -154,12 +259,14 @@ chain-stresser tx-eth-call \
 ```
 
 **How multiple limits interact:**
+
 - Each transaction must pass **all three checks**: TPS, bytes, and gas
 - If TPS limit allows 100 tx/sec but gas limit only allows 50 tx/sec worth of gas → **gas limit wins** (50 tx/sec)
 - If bytes limit allows 10 tx/sec but TPS allows 100 tx/sec → **bytes limit wins** (10 tx/sec)
 - The **most restrictive limit** determines the actual throughput and they are all optional (default 0, defines no limit).
 
 **Example:** Bank sends use ~150K gas and ~500 bytes each:
+
 ```bash
 --rate-tps 100 --rate-bytes 10000 --rate-gas 1000000
 # TPS allows:   100 tx/sec
@@ -213,7 +320,8 @@ etherman -N Counter -S ./eth/solidity/Counter.sol call 0x000... getCount
 
 See `etherman --help` for more info.
 
-## State Replay Feature 
+## State Replay Feature
+
 State replay enables stress testing by replaying real network transactions. Checkout [usage guide](state/README.md).
 
 ## License

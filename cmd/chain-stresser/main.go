@@ -473,6 +473,55 @@ func main() {
 	}
 	rootCmd.AddCommand(txWasmExecContractCmd)
 
+	var mixedPayloadConfigPath string
+
+	txMixedPayloadCmd := &cobra.Command{
+		Use:   "tx-mixed-payload",
+		Short: "Run stresstest with mixed payload types configured via YAML.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			if mixedPayloadConfigPath == "" {
+				return errors.New("--config is required")
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			mixedCfg, err := payload.LoadMixedPayloadConfig(mixedPayloadConfigPath)
+			if err != nil {
+				return errors.Wrap(err, "failed to load mixed payload config")
+			}
+
+			queryClient := chain.NewClient(
+				stressCfg.ChainID,
+				stressCfg.NodeAddress,
+				stressCfg.GRPCAddress,
+			)
+
+			mixedProvider, err := payload.NewMixedPayloadProvider(
+				mixedCfg,
+				stressCfg.MinGasPrice,
+				stressCfg.EthChainID,
+				queryClient,
+			)
+			if err != nil {
+				return errors.Wrap(err, "failed to create mixed payload provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, mixedProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	txMixedPayloadCmd.Flags().StringVar(&mixedPayloadConfigPath, "config", "", "Path to YAML config file for mixed payload (required).")
+	txMixedPayloadCmd.MarkFlagRequired("config")
+	rootCmd.AddCommand(txMixedPayloadCmd)
+
 	var replayCfg replay.TxReplayConfig
 
 	txnsReplayCmd := &cobra.Command{

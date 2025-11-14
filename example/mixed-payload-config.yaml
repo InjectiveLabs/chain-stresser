@@ -1,0 +1,47 @@
+# Mixed Payload Configuration
+# Configure multiple payload types with frequency distribution (0.0 - 1.0)
+# Frequencies are normalized, so 0.5 + 0.5 = equal distribution
+
+# Bank Send transactions
+bank_send:
+  frequency: 0.3
+  send_amount: "1inj"  # optional, defaults to "1inj"
+
+# Bank Multi Send transactions
+bank_multi_send:
+  frequency: 0.2
+  send_amount: "1inj"  # optional, defaults to "1inj"
+  num_targets: 50      # optional, defaults to 50
+
+# Ethereum value send transactions
+eth_send:
+  frequency: 0.2
+  send_amount: "1inj"  # optional, defaults to "1inj"
+
+# Ethereum contract call transactions
+eth_call:
+  frequency: 0.1
+
+# Ethereum contract deploy transactions
+eth_deploy:
+  frequency: 0.1
+
+# Exchange batch orders transactions
+exchange_batch_orders:
+  frequency: 0.05
+  spot_market_ids:  # optional, defaults to example market ID
+    - "0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"
+  derivative_market_ids:  # optional, defaults to example market ID
+    - "0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"
+
+# WASM store code transactions
+wasm_store_code:
+  frequency: 0.02
+
+# WASM init contract transactions
+wasm_init_contract:
+  frequency: 0.02
+
+# WASM exec contract transactions
+wasm_exec_contract:
+  frequency: 0.01
