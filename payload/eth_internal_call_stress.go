@@ -124,8 +124,9 @@ func (p *ethInternalCallProvider) GenerateTx(
 				}),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 
 		to: p.contractAddress,
@@ -154,8 +155,9 @@ func (p *ethInternalCallProvider) GenerateInitialTx(
 			}),
 		},
 
-		fromIdx: req.FromIdx,
-		txIdx:   req.TxIdx,
+		provider: p,
+		fromIdx:  req.FromIdx,
+		txIdx:    req.TxIdx,
 	}
 
 	ethFrom := ethcmn.BytesToAddress(req.From.Key.PubKey().Address().Bytes())

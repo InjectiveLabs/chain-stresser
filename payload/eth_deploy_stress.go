@@ -92,8 +92,9 @@ func (p *ethDeployProvider) GenerateTx(
 				}),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 	}
 

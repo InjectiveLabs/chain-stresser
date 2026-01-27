@@ -6,7 +6,7 @@
 services:
   injectived0:
     container_name: injstress-validator-0
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived
@@ -24,7 +24,7 @@ services:
     command: injectived --home=/root/.injectived start
   injectived1:
     container_name: injstress-validator-1
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived
@@ -42,7 +42,7 @@ services:
     command: injectived --home=/root/.injectived start
   injectived2:
     container_name: injstress-validator-2
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived
@@ -60,7 +60,7 @@ services:
     command: injectived --home=/root/.injectived start
   injectived3:
     container_name: injstress-validator-3
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived
@@ -78,7 +78,7 @@ services:
     command: injectived --home=/root/.injectived start
   injectived4:
     container_name: injstress-sentry-node-0
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived
@@ -108,7 +108,7 @@ services:
     command: injectived --home=/root/.injectived start
   injectived5:
     container_name: injstress-sentry-node-1
-    image: "injectivelabs/injective-core:v1.16.0-beta.3"
+    image: "injectivelabs/injective-core:v1.17.0"
     environment:
       - DEBUG=0
       - NODE_HOME=/root/.injectived

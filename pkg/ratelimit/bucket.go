@@ -2,11 +2,11 @@ package ratelimit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 )
 
@@ -17,10 +17,10 @@ type limiter struct {
 
 func NewLimiter(ratePerSecond float64, burstSize int) (Limiter, error) {
 	if ratePerSecond <= 0 {
-		return nil, fmt.Errorf("%w: got %f", ErrRateMustBePositive, ratePerSecond)
+		return nil, errors.Wrapf(ErrRateMustBePositive, "got %f", ratePerSecond)
 	}
 	if burstSize <= 0 {
-		return nil, fmt.Errorf("%w: got %d", ErrBurstSizeMustBePositive, burstSize)
+		return nil, errors.Wrapf(ErrBurstSizeMustBePositive, "got %d", burstSize)
 	}
 
 	rateLimiter := rate.NewLimiter(rate.Limit(ratePerSecond), burstSize)
@@ -32,6 +32,7 @@ func (l *limiter) Wait(ctx context.Context, tokens int) error {
 	if tokens <= 0 {
 		return nil
 	}
+
 	return l.rateLimiter.WaitN(ctx, tokens)
 }
 
@@ -40,6 +41,7 @@ func (l *limiter) TryConsume(tokens int) bool {
 	if tokens <= 0 {
 		return true // Nothing to consume
 	}
+
 	return l.rateLimiter.AllowN(time.Now(), tokens)
 }
 
@@ -53,6 +55,7 @@ func (l *limiter) SetRate(ratePerSecond float64) error {
 	if ratePerSecond <= 0 {
 		return fmt.Errorf("%w: got %f", ErrRateMustBePositive, ratePerSecond)
 	}
+
 	l.rateLimiter.SetLimit(rate.Limit(ratePerSecond))
 	return nil
 }
@@ -131,7 +134,8 @@ func (ml *MultiLimiter) WaitForTransaction(ctx context.Context, txMetrics TxMetr
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return err
 			}
-			return fmt.Errorf("%w: %w", ErrTPSRateLimitExceeded, err)
+
+			return errors.Wrap(ErrTPSRateLimitExceeded, err.Error())
 		}
 	}
 
@@ -145,12 +149,14 @@ func (ml *MultiLimiter) WaitForTransaction(ctx context.Context, txMetrics TxMetr
 			if remaining < uint64(chunk) {
 				n = int(remaining)
 			}
+
 			if err := ml.bytesLimiter.Wait(ctx, n); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
 				}
-				return fmt.Errorf("%w: %w", ErrBytesRateLimitExceeded, err)
+				return errors.Wrapf(ErrBytesRateLimitExceeded, "failed to wait for bytes: %v", err)
 			}
+
 			remaining -= uint64(n)
 		}
 	}
@@ -165,12 +171,15 @@ func (ml *MultiLimiter) WaitForTransaction(ctx context.Context, txMetrics TxMetr
 			if remaining < uint64(chunk) {
 				n = int(remaining)
 			}
+
 			if err := ml.gasLimiter.Wait(ctx, n); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
 				}
-				return fmt.Errorf("%w: %w", ErrGasRateLimitExceeded, err)
+
+				return errors.Wrapf(ErrGasRateLimitExceeded, "failed to wait for gas: %v", err)
 			}
+
 			remaining -= uint64(n)
 		}
 	}

@@ -474,7 +474,6 @@
     },
     "permissions": {
       "params": {
-        "wasm_hook_query_max_gas": "200000"
       },
       "namespaces": []
     },

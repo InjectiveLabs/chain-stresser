@@ -34,7 +34,7 @@ const (
 	defaultInjectiveDockerImage = "injectivelabs/injective-core"
 	defaultDockerSubnet         = "172.127.0.0/24"
 
-	latestInjectiveCoreTag = "v1.16.4"
+	latestInjectiveCoreTag = "v1.17.0"
 )
 
 var (
@@ -474,25 +474,23 @@ func main() {
 	rootCmd.AddCommand(txWasmExecContractCmd)
 
 	var mixedPayloadConfigPath string
-
 	txMixedPayloadCmd := &cobra.Command{
-		Use:   "tx-mixed-payload",
+		Use:   "tx-mixed-payload <config-file.yaml>",
 		Short: "Run stresstest with mixed payload types configured via YAML.",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if verboseOutput {
 				log.DefaultLogger.SetLevel(log.DebugLevel)
 			}
 
-			if mixedPayloadConfigPath == "" {
-				return errors.New("--config is required")
-			}
+			mixedPayloadConfigPath = args[0]
 
 			mixedCfg, err := payload.LoadMixedPayloadConfig(mixedPayloadConfigPath)
 			if err != nil {
 				return errors.Wrap(err, "failed to load mixed payload config")
 			}
 
-			if err := applyStresserConfigFromYAML(&stressCfg, mixedCfg.StresserConfig, cmd); err != nil {
+			if err := applyStresserConfigFromYAML(&stressCfg, mixedCfg.StresserConfig, cmd, &accountFile, &numOfAccounts); err != nil {
 				return errors.Wrap(err, "failed to apply stresser config from YAML")
 			}
 
@@ -522,8 +520,6 @@ func main() {
 			return nil
 		},
 	}
-	txMixedPayloadCmd.Flags().StringVar(&mixedPayloadConfigPath, "config", "", "Path to YAML config file for mixed payload (required).")
-	txMixedPayloadCmd.MarkFlagRequired("config")
 	rootCmd.AddCommand(txMixedPayloadCmd)
 
 	var replayCfg replay.TxReplayConfig
@@ -659,6 +655,8 @@ func applyStresserConfigFromYAML(
 	stressCfg *stresser.StressConfig,
 	yamlCfg *payload.StresserConfig,
 	cmd *cobra.Command,
+	accountFile *string,
+	numOfAccounts *int,
 ) error {
 	if yamlCfg == nil {
 		return nil
@@ -686,6 +684,14 @@ func applyStresserConfigFromYAML(
 
 	if yamlCfg.AwaitTxConfirmation != nil && !cmd.Flags().Changed("await") {
 		stressCfg.AwaitTxConfirmation = *yamlCfg.AwaitTxConfirmation
+	}
+
+	if yamlCfg.Accounts != "" && !cmd.Flags().Changed("accounts") {
+		*accountFile = yamlCfg.Accounts
+	}
+
+	if yamlCfg.AccountsNum != 0 && !cmd.Flags().Changed("accounts-num") {
+		*numOfAccounts = yamlCfg.AccountsNum
 	}
 
 	if yamlCfg.NumOfTransactions != 0 && !cmd.Flags().Changed("transactions") {

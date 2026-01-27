@@ -1,0 +1,32 @@
+stresser_config:
+  chain_id: "stressinj-1337"
+  eth_chain_id: 1337
+  min_gas_price: "1inj"
+  node_addr: "127.0.0.1:26657"
+  grpc_addr: "127.0.0.1:9900"
+  await: true
+  accounts: "./chain-stresser-deploy/instances/0/accounts.json"
+  accounts_num: 1000
+  transactions: 100
+  rate_tps: 0
+  rate_bytes: 0
+  rate_gas: 0
+  rate_burst_size: 0
+
+bank_send:
+  frequency: 0.3
+  send_amount: "1inj"
+
+bank_multi_send:
+  frequency: 0.2
+  send_amount: "1inj"
+
+eth_send:
+  frequency: 0.2
+  send_amount: "1inj"
+
+eth_call:
+  frequency: 0.2
+
+eth_deploy:
+  frequency: 0.1

@@ -110,8 +110,9 @@ func (p *bankMultiSendProvider) GenerateTx(
 				banktypes.NewMsgMultiSend(input, outputs),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 
 		// doesn't matter for this tx

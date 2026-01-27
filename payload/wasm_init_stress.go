@@ -101,10 +101,11 @@ func (p *wasmInitContractProvider) GenerateTx(
 
 	tx := &wasmInitContractTx{
 		baseTx: baseTx{
-			from:    req.From,
-			msgs:    []sdk.Msg{msg},
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			from:     req.From,
+			msgs:     []sdk.Msg{msg},
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 	}
 

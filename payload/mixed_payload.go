@@ -1,12 +1,15 @@
 package payload
 
 import (
+	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/xlab/suplog"
 	"gopkg.in/yaml.v3"
 
 	"github.com/InjectiveLabs/chain-stresser/v2/chain"
@@ -32,6 +35,8 @@ type StresserConfig struct {
 	NodeAddress         string  `yaml:"node_addr,omitempty"`
 	GRPCAddress         string  `yaml:"grpc_addr,omitempty"`
 	AwaitTxConfirmation *bool   `yaml:"await,omitempty"`
+	Accounts            string  `yaml:"accounts,omitempty"`
+	AccountsNum         int     `yaml:"accounts_num,omitempty"`
 	NumOfTransactions   int     `yaml:"transactions,omitempty"`
 	RateTPS             float64 `yaml:"rate_tps,omitempty"`
 	RateBytes           uint64  `yaml:"rate_bytes,omitempty"`
@@ -177,13 +182,7 @@ func NewMixedPayloadProvider(
 
 	if cfg.ExchangeBatchOrders != nil && cfg.ExchangeBatchOrders.Frequency > 0 {
 		spotMarketIDs := cfg.ExchangeBatchOrders.SpotMarketIDs
-		if len(spotMarketIDs) == 0 {
-			spotMarketIDs = []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}
-		}
 		derivativeMarketIDs := cfg.ExchangeBatchOrders.DerivativeMarketIDs
-		if len(derivativeMarketIDs) == 0 {
-			derivativeMarketIDs = []string{"0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"}
-		}
 		provider, err := NewExchangeBatchOrdersProvider(minGasPrice, spotMarketIDs, derivativeMarketIDs)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create exchange batch orders provider")
@@ -225,6 +224,20 @@ func NewMixedPayloadProvider(
 
 	normalizedFreqs := normalizeFrequencies(frequencies)
 
+	providerNames := []string{}
+	for _, provider := range providers {
+		providerNames = append(providerNames, provider.Name())
+	}
+
+	providerFreqPairs := make([]string, len(providers))
+	for i := range providers {
+		providerFreqPairs[i] = fmt.Sprintf("%s=%.2f%%", providerNames[i], normalizedFreqs[i]*100)
+	}
+
+	log.WithFields(log.Fields{
+		"providers": providerFreqPairs,
+	}).Info("Mixed payload provider initialized")
+
 	return &MixedPayloadProvider{
 		providers:   providers,
 		frequencies: normalizedFreqs,
@@ -244,7 +257,7 @@ func normalizeFrequencies(frequencies []float64) []float64 {
 
 	normalized := make([]float64, len(frequencies))
 	for i, freq := range frequencies {
-		normalized[i] = freq / total
+		normalized[i] = math.Round(freq/total*10000) / 10000
 	}
 
 	return normalized
@@ -269,19 +282,63 @@ func (m *MixedPayloadProvider) Name() string {
 }
 
 func (m *MixedPayloadProvider) GenerateInitialTx(req TxRequest) (Tx, error) {
-	provider := m.selectProvider()
-	return provider.GenerateInitialTx(req)
+	// IMPORTANT: We must call GenerateInitialTx for ALL providers, not just a random one.
+	// Some providers (like EthCall) need to initialize state during GenerateInitialTx
+	// (e.g., deploy contracts, store addresses) before GenerateTx can work.
+	// Since we randomly select providers in GenerateTx, all providers must be initialized.
+
+	// NOTE: This method is kept for backward compatibility but only returns the first initial tx.
+	// Use GenerateAllInitialTxs() to get all initial txs from all providers.
+	initialTxs, err := m.GenerateAllInitialTxs(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(initialTxs) == 0 {
+		return nil, nil
+	}
+
+	return initialTxs[0], nil
+}
+
+// GenerateAllInitialTxs generates initial transactions for ALL providers in the mix.
+// This is necessary because some providers (like EthCall) store state during initialization
+// (e.g., deployed contract addresses) that is later used in GenerateTx.
+// Since GenerateTx randomly selects providers, all must be properly initialized.
+func (m *MixedPayloadProvider) GenerateAllInitialTxs(req TxRequest) ([]Tx, error) {
+	var initialTxs []Tx
+
+	for _, provider := range m.providers {
+		tx, err := provider.GenerateInitialTx(req)
+		if err != nil {
+			return nil, err
+		}
+		if tx != nil {
+			initialTxs = append(initialTxs, tx.WithProvider(provider))
+		}
+	}
+
+	return initialTxs, nil
 }
 
 func (m *MixedPayloadProvider) GenerateTx(req TxRequest) (Tx, error) {
 	provider := m.selectProvider()
-	return provider.GenerateTx(req)
+	tx, err := provider.GenerateTx(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx.WithProvider(provider), nil
 }
 
 func (m *MixedPayloadProvider) BuildAndSignTx(
 	client chain.Client,
 	unsignedTx Tx,
 ) (Tx, error) {
-	provider := m.selectProvider()
+	provider := unsignedTx.Provider()
+	if provider == nil {
+		return nil, errors.New("transaction has no associated provider")
+	}
+
 	return provider.BuildAndSignTx(client, unsignedTx)
 }

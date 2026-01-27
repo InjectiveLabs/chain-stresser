@@ -86,8 +86,9 @@ func (p *bankSendProvider) GenerateTx(
 				banktypes.NewMsgSend(req.From.Key.Address(), to, sendCoins),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 
 		to: to,

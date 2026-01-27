@@ -50,14 +50,17 @@ type Tx interface {
 	Msgs() []sdk.Msg
 	WithBytes(txBytes []byte) Tx
 	Bytes() []byte
+	Provider() TxProvider
+	WithProvider(provider TxProvider) Tx
 }
 
 var _ Tx = (*baseTx)(nil)
 
 type baseTx struct {
-	from    chain.Account
-	msgs    []sdk.Msg
-	txBytes []byte
+	from     chain.Account
+	msgs     []sdk.Msg
+	txBytes  []byte
+	provider TxProvider
 
 	// queue attributes
 
@@ -91,4 +94,14 @@ func (t *baseTx) FromIdx() int {
 
 func (t *baseTx) TxIdx() int {
 	return t.txIdx
+}
+
+func (t *baseTx) Provider() TxProvider {
+	return t.provider
+}
+
+func (t *baseTx) WithProvider(provider TxProvider) Tx {
+	tc := *t
+	tc.provider = provider
+	return &tc
 }

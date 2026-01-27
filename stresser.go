@@ -185,6 +185,23 @@ func Stress(
 	getAccountNumberSequencePace := pace.New("sequence fetched", 10*time.Second, NewPaceReporter(logger))
 	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
 
+	// Create pace meters for each provider name
+	providerPaceMeters := make(map[string]pace.Pace)
+	providerPaceMetersMux := new(sync.Mutex)
+	getOrCreateProviderPace := func(providerName string) pace.Pace {
+		providerPaceMetersMux.Lock()
+		defer providerPaceMetersMux.Unlock()
+
+		if paceMeter, exists := providerPaceMeters[providerName]; exists {
+			return paceMeter
+		}
+
+		// Create a new pace meter for this provider
+		paceMeter := pace.New(fmt.Sprintf("signed tx [%s]", providerName), 10*time.Second, NewPaceReporter(logger))
+		providerPaceMeters[providerName] = paceMeter
+		return paceMeter
+	}
+
 	numOfAccounts := len(config.Accounts)
 	logger.WithFields(log.Fields{
 		"num": numOfAccounts * config.NumOfTransactions,
@@ -224,6 +241,9 @@ func Stress(
 							return ctx.Err()
 
 						case txSignedQueue <- signedTx:
+							providerName := tx.Provider().Name()
+							providerPace := getOrCreateProviderPace(providerName)
+							providerPace.Step(1)
 						}
 					}
 				}
@@ -330,6 +350,12 @@ func Stress(
 		spawn("collect", parallel.Exit, func(ctx context.Context) error {
 			defer func() {
 				signedTxPace.Pause()
+				// Pause all provider-specific pace meters
+				providerPaceMetersMux.Lock()
+				for _, paceMeter := range providerPaceMeters {
+					paceMeter.Pause()
+				}
+				providerPaceMetersMux.Unlock()
 			}()
 
 			defer catcher.Catch(
@@ -372,21 +398,16 @@ func Stress(
 	logger.Info("Broadcasting transactions 🚀")
 
 	// Create broadcast function with optional rate limiting
-	rateLimitedBroadcast, err := buildBroadcastClient(config)
+	broadcastFunc, err := buildBroadcastClient(config)
 	if err != nil {
-		logger.WithError(err).Error("Failed to create broadcast function, falling back to unthrottled")
-		// Create fallback broadcast function without rate limiting
-		baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
-		rateLimitedBroadcast = func(ctx context.Context, txBytes []byte) (string, error) {
-			return baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
-		}
+		return errors.Wrap(err, "failed to build broadcast client")
 	} else if config.RateLimit.IsEnabled() {
 		logger.WithFields(log.Fields{
 			"tps_limit":        config.RateLimit.TxPerSecond,
 			"bytes_per_second": config.RateLimit.BytesPerSecond,
 			"gas_per_second":   config.RateLimit.GasPerSecond,
 			"burst_size":       config.RateLimit.Burst.Size,
-		}).Info("✅ Rate limiter enabled")
+		}).Info("Rate limiter enabled 🐢")
 	}
 
 	if err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
@@ -407,7 +428,7 @@ func Stress(
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 							tx := accountTxs[txIndex]
 
-							txHash, err := rateLimitedBroadcast(ctx, tx)
+							txHash, err := broadcastFunc(ctx, tx)
 							if err != nil {
 								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
 									logger.WithError(err).WithFields(log.Fields{
@@ -475,7 +496,7 @@ func StressReplay(
 			"bytes_per_second": config.RateLimit.BytesPerSecond,
 			"gas_per_second":   config.RateLimit.GasPerSecond,
 			"burst_size":       config.RateLimit.Burst.Size,
-		}).Info("✅ Rate limiter enabled for replay")
+		}).Info("Rate limiter enabled for replay 🐢")
 
 	}
 
@@ -571,6 +592,9 @@ func StressReplay(
 					successCount++
 					broadcastTxPace.Step(1)
 				}
+
+				// Placeholder if needed later
+				_ = txHash
 			}
 
 			logFields := log.Fields{
@@ -620,6 +644,7 @@ func getAccountNumberSequence(
 	},
 		retry.Context(ctx),
 		retry.Attempts(10),
+		retry.Delay(100*time.Millisecond),
 		retry.MaxDelay(5*time.Second),
 	)
 	if err != nil {
@@ -641,6 +666,11 @@ func createAndBroadcastInitialTxs(
 ) error {
 	initialTxs := make([]payload.Tx, 0, len(fromPrivateKeys))
 
+	// Check if this is a MixedPayloadProvider that needs special handling
+	type mixedProvider interface {
+		GenerateAllInitialTxs(req payload.TxRequest) ([]payload.Tx, error)
+	}
+
 	for keyIdx, fromPrivateKey := range fromPrivateKeys {
 		// fetching account number and sequence should be relatively fast, let's do one by one for each key
 		accNum, accSeq, err := getAccountNumberSequence(ctx, client, fromPrivateKey.AccAddress())
@@ -651,8 +681,7 @@ func createAndBroadcastInitialTxs(
 
 		getAccountNumberSequencePace.Step(1)
 
-		// generating initial tx for each key
-		initialTx, err := provider.GenerateInitialTx(payload.TxRequest{
+		txReq := payload.TxRequest{
 			Keys: []chain.Secp256k1PrivateKey{
 				fromPrivateKey,
 			},
@@ -665,14 +694,27 @@ func createAndBroadcastInitialTxs(
 
 			FromIdx: keyIdx,
 			TxIdx:   0,
-		})
-		if err != nil {
-			err = errors.Wrap(err, "❌ Generating initial Tx failed")
-			return err
 		}
 
-		if initialTx != nil {
-			initialTxs = append(initialTxs, initialTx)
+		// For MixedPayloadProvider, we need to generate initial txs for ALL underlying providers
+		if mixedProvider, ok := provider.(mixedProvider); ok {
+			accountInitialTxs, err := mixedProvider.GenerateAllInitialTxs(txReq)
+			if err != nil {
+				err = errors.Wrap(err, "❌ Generating initial Txs failed")
+				return err
+			}
+			initialTxs = append(initialTxs, accountInitialTxs...)
+		} else {
+			// Standard single-provider case
+			initialTx, err := provider.GenerateInitialTx(txReq)
+			if err != nil {
+				err = errors.Wrap(err, "❌ Generating initial Tx failed")
+				return err
+			}
+
+			if initialTx != nil {
+				initialTxs = append(initialTxs, initialTx)
+			}
 		}
 	}
 
@@ -727,7 +769,8 @@ func createAndBroadcastInitialTxs(
 				return nil
 			},
 				retry.Context(ctx),
-				retry.Attempts(5),
+				retry.Attempts(10),
+				retry.Delay(100*time.Millisecond),
 				retry.MaxDelay(5*time.Second),
 			); err != nil {
 				logger.WithError(err).Error("❌ All attempts to broadcast initial Tx failed")
@@ -740,29 +783,49 @@ func createAndBroadcastInitialTxs(
 	return nil
 }
 
-// buildBroadcastFunc creates a broadcast function with optional rate limiting
+// buildBroadcastClient creates a broadcast retrying function with optional rate limiting
 func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) {
-	// Create shared client for all accounts
 	baseClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
 
-	// Create rate limiter if enabled
 	var rateLimiter *ratelimit.MultiLimiter
 	if config.RateLimit.IsEnabled() {
 		limiter, err := ratelimit.NewMultiLimiter(config.RateLimit, baseClient.TxConfig())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create rate limiter: %w", err)
+			return nil, errors.Wrap(err, "failed to create rate limiter")
 		}
+
 		rateLimiter = limiter
 	}
 
-	// Return broadcast function with rate limiting
-	return func(ctx context.Context, txBytes []byte) (string, error) {
-		// Apply rate limiting if enabled
+	broadcastFn := func(ctx context.Context, txBytes []byte) (string, error) {
 		if rateLimiter != nil {
 			if err := rateLimiter.WaitForTransactionBytes(ctx, txBytes); err != nil {
-				return "", fmt.Errorf("rate limit wait failed: %w", err)
+				return "", errors.Wrap(err, "wait cancelled")
 			}
 		}
-		return baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
-	}, nil
+
+		var txHash string
+		err := retry.Do(func() error {
+			var err error
+
+			txHash, err = baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
+			if err != nil {
+				return errors.Wrap(err, "broadcasting transaction failed")
+			}
+
+			return nil
+		},
+			retry.Context(ctx),
+			retry.Attempts(10),
+			retry.DelayType(retry.BackOffDelay),
+			retry.MaxDelay(5*time.Second),
+		)
+		if err != nil {
+			return "", err
+		}
+
+		return txHash, nil
+	}
+
+	return broadcastFn, nil
 }

@@ -75,6 +75,14 @@ func (tx *txnsReplayTx) WithBytes(bytes []byte) Tx {
 	}
 }
 
+func (tx *txnsReplayTx) Provider() TxProvider {
+	return nil
+}
+
+func (tx *txnsReplayTx) WithProvider(provider TxProvider) Tx {
+	return tx
+}
+
 // FromIdx returns 0 as state replay transactions don't have account indices
 func (tx *txnsReplayTx) FromIdx() int {
 	return 0

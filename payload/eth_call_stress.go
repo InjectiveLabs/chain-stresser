@@ -117,8 +117,9 @@ func (p *ethCallProvider) GenerateTx(
 				}),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 
 		to: p.contractAddress,
@@ -148,8 +149,9 @@ func (p *ethCallProvider) GenerateInitialTx(
 				}),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 	}
 

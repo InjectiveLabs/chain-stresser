@@ -231,8 +231,9 @@ func (p *ethUserOpProvider) GenerateTx(
 				}),
 			},
 
-			fromIdx: req.FromIdx,
-			txIdx:   req.TxIdx,
+			provider: p,
+			fromIdx:  req.FromIdx,
+			txIdx:    req.TxIdx,
 		},
 
 		to: p.entrypointAddress,
@@ -302,8 +303,9 @@ func (p *ethUserOpProvider) GenerateInitialTx(
 			}),
 		},
 
-		fromIdx: req.FromIdx,
-		txIdx:   req.TxIdx,
+		provider: p,
+		fromIdx:  req.FromIdx,
+		txIdx:    req.TxIdx,
 	}
 
 	return tx, nil
