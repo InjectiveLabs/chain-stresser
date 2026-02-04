@@ -358,7 +358,7 @@ broadcast = true
 wal_dir = ""
 
 # Maximum number of transactions in the mempool
-size = 500
+size = 2000
 
 # Maximum size in bytes of a single transaction accepted into the mempool.
 max_tx_bytes = 1048576

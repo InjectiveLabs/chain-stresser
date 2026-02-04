@@ -5,7 +5,7 @@
   "consensus_params": {
     "block": {
       "max_bytes": "4194304",
-      "max_gas": "10000000000"
+      "max_gas": "150000000"
     },
     "evidence": {
       "max_age_num_blocks": "100000",
@@ -524,6 +524,23 @@
         "receive_enabled": true
       },
       "total_escrowed": []
+    },
+    "txfees": {
+      "params": {
+        "max_gas_wanted_per_tx": "30000000",
+        "high_gas_tx_threshold": "25000000",
+        "min_gas_price_for_high_gas_tx": "0.000000000000000000",
+        "mempool1559_enabled": true,
+        "min_gas_price": "160000000.000000000000000000",
+        "default_base_fee_multiplier": "1.500000000000000000",
+        "max_base_fee_multiplier": "1000.000000000000000000",
+        "reset_interval": "72000",
+        "max_block_change_rate": "0.100000000000000000",
+        "target_block_space_percent_rate": "0.500000000000000000",
+        "recheck_fee_low_base_fee": "3.000000000000000000",
+        "recheck_fee_high_base_fee": "2.300000000000000000",
+        "recheck_fee_base_fee_threshold_multiplier": "4.000000000000000000"
+      }
     },
     "upgrade": {},
     "wasm": {

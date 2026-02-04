@@ -179,6 +179,8 @@ func Stress(
 	}
 
 	client := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+	stopMempoolReporter := startMempoolReporter(ctx, client, logger)
+	defer stopMempoolReporter()
 
 	startTs := time.Now()
 	signedTxPace := pace.New("signed tx", 10*time.Second, NewPaceReporter(logger))
@@ -502,6 +504,8 @@ func StressReplay(
 
 	// Create client for gas fuzzing (separate from broadcast function)
 	accountClient := chain.NewClient(config.ChainID, config.NodeAddress, config.GRPCAddress)
+	stopMempoolReporter := startMempoolReporter(ctx, accountClient, logger)
+	defer stopMempoolReporter()
 	broadcastTxPace := pace.New("sent tx", 10*time.Second, NewPaceReporter(logger))
 
 	// Initialize gas fuzzer if enabled
@@ -810,6 +814,9 @@ func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) 
 
 			txHash, err = baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
 			if err != nil {
+				if _, ok := chain.IsSequenceError(err); ok {
+					return retry.Unrecoverable(err)
+				}
 				return errors.Wrap(err, "broadcasting transaction failed")
 			}
 
@@ -828,4 +835,37 @@ func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) 
 	}
 
 	return broadcastFn, nil
+}
+
+func startMempoolReporter(ctx context.Context, client chain.Client, logger log.Logger) func() {
+	reportCtx, cancel := context.WithCancel(ctx)
+	ticker := time.NewTicker(10 * time.Second)
+
+	go func() {
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-reportCtx.Done():
+				return
+			case <-ticker.C:
+				reqCtx, reqCancel := context.WithTimeout(reportCtx, 5*time.Second)
+				count, total, totalBytes, err := client.NumUnconfirmedTxs(reqCtx)
+				reqCancel()
+
+				if err != nil {
+					logger.WithError(err).Warning("⚠️ Failed to query num_unconfirmed_txs")
+					continue
+				}
+
+				logger.WithFields(log.Fields{
+					"num_unconfirmed_txs": count,
+					"total_txs":           total,
+					"total_bytes":         totalBytes,
+				}).Info("Mempool status")
+			}
+		}
+	}()
+
+	return cancel
 }

@@ -82,9 +82,10 @@ func GenerateConfigs(
 		valDir := fmt.Sprintf("%s/%s", rootOutDir, relativeNodeDir)
 
 		txIndexerKind := chain.TxIndexerKV
-		if env.ProdLike {
-			txIndexerKind = chain.TxIndexerDisabled
-		}
+
+		// if env.ProdLike {
+		// 	txIndexerKind = chain.TxIndexerDisabled
+		// }
 
 		nodeIPAddr := net.IPv4(127, 0, 0, 1)
 		if !env.LocalNative {
@@ -97,18 +98,18 @@ func GenerateConfigs(
 		}
 
 		nodeConfig := &chain.NodeConfig{
-			Home:                 fmt.Sprintf("./%s", relativeNodeDir),
-			Moniker:              fmt.Sprintf("validator-%d", i),
-			PeerID:               chain.NodeID(nodePrivateKey.PubKey()),
-			IPListen:             net.IPv4zero,
-			IPAddr:               nodeIPAddr,
-			Ports:                nodePorts,
-			NodeKey:              nodePrivateKey,
-			ValidatorKey:         validatorPrivateKey,
-			ProdLike:             env.ProdLike,
-			TxIndexer:            txIndexerKind,
-			DiscardABCIResponses: env.ProdLike,                        // discard in prod
-			PortsExposed:         env.NumOfSentryNodes == 0 && i == 0, // expose ports only for the first validator (and no sentry nodes)
+			Home:         fmt.Sprintf("./%s", relativeNodeDir),
+			Moniker:      fmt.Sprintf("validator-%d", i),
+			PeerID:       chain.NodeID(nodePrivateKey.PubKey()),
+			IPListen:     net.IPv4zero,
+			IPAddr:       nodeIPAddr,
+			Ports:        nodePorts,
+			NodeKey:      nodePrivateKey,
+			ValidatorKey: validatorPrivateKey,
+			ProdLike:     env.ProdLike,
+			TxIndexer:    txIndexerKind,
+			// DiscardABCIResponses: env.ProdLike,                        // discard in prod
+			PortsExposed: env.NumOfSentryNodes == 0 && i == 0, // expose ports only for the first validator (and no sentry nodes)
 		}
 		nodeConfig.Save(valDir)
 
