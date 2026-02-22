@@ -30,3 +30,23 @@ eth_call:
 
 eth_deploy:
   frequency: 0.1
+
+  # Exchange batch orders transactions
+exchange_batch_orders:
+  frequency: 0.05
+  spot_market_ids:  # optional, defaults to example market ID
+    - "0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"
+  derivative_market_ids:  # optional, defaults to example market ID
+    - "0x1422a13427d5eabd4d8de7907c8340f7e58cb15553a9fd4ad5c90406561886f9"
+
+# WASM store code transactions
+wasm_store_code:
+  frequency: 0.02
+
+# WASM init contract transactions
+wasm_init_contract:
+  frequency: 0.02
+
+# WASM exec contract transactions
+wasm_exec_contract:
+  frequency: 0.01

@@ -42,7 +42,8 @@ const (
 	initialBalanceAccount = "1000000000000000000000000" + bondDenom
 
 	// minimumGasPrices to be used for realistic bench (involving x/distribition)
-	minimumGasPrices = "1inj"
+	minimumGasPrices       = "1inj"
+	txfeesMinimumGasPrices = "1"
 )
 
 func GenerateConfigs(
@@ -62,10 +63,11 @@ func GenerateConfigs(
 	}
 
 	genesis := chain.NewGenesis(&chain.GenesisConfig{
-		ChainID:    env.ChainID,
-		EthChainID: env.EthChainID,
-		EvmEnabled: env.EvmEnabled,
-		ProdLike:   env.ProdLike,
+		ChainID:          env.ChainID,
+		EthChainID:       env.EthChainID,
+		EvmEnabled:       env.EvmEnabled,
+		ProdLike:         env.ProdLike,
+		MinimumGasPrices: txfeesMinimumGasPrices,
 	})
 
 	persistentValidatorPeers := make([]string, 0, env.NumOfValidators)
