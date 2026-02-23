@@ -15,6 +15,8 @@ import (
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
 	retry "github.com/avast/retry-go/v4"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	cmtrpcjson "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	cosmoserrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -39,7 +41,17 @@ var errRetry = errors.New("retry required")
 
 // TODO: replace with https://github.com/InjectiveLabs/sdk-go/tree/master/client/chain
 func NewClient(chainID string, addr string, grpcAddr string) Client {
-	rpcClient, err := client.NewClientFromNode("tcp://" + addr)
+	rpcHTTPClient, err := cmtrpcjson.DefaultHTTPClient("tcp://" + addr)
+	orPanic(err)
+
+	// if you're experiencing
+	if transport, ok := rpcHTTPClient.Transport.(*http.Transport); ok {
+		transport.MaxIdleConns = 4096
+		transport.MaxIdleConnsPerHost = 4096
+		transport.IdleConnTimeout = 90 * time.Second
+	}
+
+	rpcClient, err := rpchttp.NewWithClient("tcp://"+addr, rpcHTTPClient)
 	orPanic(err)
 
 	grpcClient, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -302,9 +314,9 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 		}
 
 		if !result.alreadyInMempool && result.txHash != "" {
-			logger.WithFields(log.Fields{
-				"txHash": result.txHash,
-			}).Info("🔄 Tx reinserted into mempool")
+			//logger.WithFields(log.Fields{
+			//	"txHash": result.txHash,
+			//}).Info("🔄 Tx reinserted into mempool")
 			return result.txHash, true, nil
 		}
 

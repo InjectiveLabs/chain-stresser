@@ -814,6 +814,14 @@ func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) 
 
 			txHash, err = baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
 			if err != nil {
+				//if strings.Contains(err.Error(), "already in mempool cache") {
+				//	return nil
+				//}
+				//
+				//if strings.Contains(err.Error(), "transaction already in mempool") {
+				//	return nil
+				//}
+
 				if _, ok := chain.IsSequenceError(err); ok {
 					return retry.Unrecoverable(err)
 				}
