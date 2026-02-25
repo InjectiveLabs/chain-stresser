@@ -87,6 +87,9 @@ run-wasm-init-contract:
 run-wasm-exec-contract:
 	chain-stresser tx-wasm-exec-contract --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
 
+run-mixed:
+	chain-stresser tx-mixed-payload mixed-payload-config.yaml
+
 args = $(foreach a,$($(subst _,-,$1)_args),$(if $(value $a),"$($a)"))
 eth-counter-get_args = contract
 

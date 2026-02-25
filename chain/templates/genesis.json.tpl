@@ -110,6 +110,11 @@
       "delegator_starting_infos": [],
       "validator_slash_events": []
     },
+    "txfees": {
+      "params": {
+        "min_gas_price": "{{.MinimumGasPrices}}"
+      }
+    },
     "evidence": {
       "evidence": []
     },

@@ -42,13 +42,14 @@ const (
 )
 
 type GenesisConfig struct {
-	AppVersion  string
-	GenesisTime string
-	ChainID     string
-	EthChainID  int
-	BondDenom   string
-	EvmEnabled  bool
-	ProdLike    bool
+	AppVersion       string
+	GenesisTime      string
+	ChainID          string
+	EthChainID       int
+	BondDenom        string
+	EvmEnabled       bool
+	ProdLike         bool
+	MinimumGasPrices string
 }
 
 func NewGenesis(genConfig *GenesisConfig) *Genesis {

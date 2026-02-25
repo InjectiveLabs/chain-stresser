@@ -531,7 +531,7 @@
         "high_gas_tx_threshold": "25000000",
         "min_gas_price_for_high_gas_tx": "0.000000000000000000",
         "mempool1559_enabled": true,
-        "min_gas_price": "160000000.000000000000000000",
+        "min_gas_price": "{{.MinimumGasPrices}}",
         "default_base_fee_multiplier": "1.500000000000000000",
         "max_base_fee_multiplier": "1000.000000000000000000",
         "reset_interval": "72000",
