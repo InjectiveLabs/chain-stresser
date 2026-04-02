@@ -214,7 +214,10 @@ func Stress(
 	txQueue := make(chan payload.Tx, 1000000)
 	txSignedQueue := make(chan payload.Tx, 1000000)
 
-	err := parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
+	cc, err := buildBroadcastClient(config)
+	orPanic(err)
+
+	err = parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 
 		for n := 0; n < runtime.NumCPU(); n++ {
 			spawn(fmt.Sprintf("signer-%d", n), parallel.Continue, func(ctx context.Context) error {
@@ -401,6 +404,7 @@ func Stress(
 
 	// Create broadcast function with optional rate limiting
 	broadcastFunc, err := buildBroadcastClient(config)
+	_ = broadcastFunc
 	if err != nil {
 		return errors.Wrap(err, "failed to build broadcast client")
 	} else if config.RateLimit.IsEnabled() {
@@ -430,7 +434,7 @@ func Stress(
 						for txIndex := 0; txIndex < config.NumOfTransactions; {
 							tx := accountTxs[txIndex]
 
-							txHash, err := broadcastFunc(ctx, tx)
+							txHash, err := cc(ctx, tx)
 							if err != nil {
 								if expectedAccSeq, ok := chain.IsSequenceError(err); ok {
 									logger.WithError(err).WithFields(log.Fields{
@@ -648,8 +652,8 @@ func getAccountNumberSequence(
 	},
 		retry.Context(ctx),
 		retry.Attempts(10),
-		retry.Delay(100*time.Millisecond),
-		retry.MaxDelay(5*time.Second),
+		retry.Delay(300*time.Millisecond),
+		//retry.MaxDelay(5*time.Second),
 	)
 	if err != nil {
 		return 0, 0, err
@@ -774,8 +778,8 @@ func createAndBroadcastInitialTxs(
 			},
 				retry.Context(ctx),
 				retry.Attempts(10),
-				retry.Delay(100*time.Millisecond),
-				retry.MaxDelay(5*time.Second),
+				retry.DelayType(retry.BackOffDelay),
+				retry.MaxDelay(2*time.Second),
 			); err != nil {
 				logger.WithError(err).Error("❌ All attempts to broadcast initial Tx failed")
 			}
@@ -814,17 +818,10 @@ func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) 
 
 			txHash, err = baseClient.Broadcast(ctx, txBytes, config.AwaitTxConfirmation)
 			if err != nil {
-				//if strings.Contains(err.Error(), "already in mempool cache") {
-				//	return nil
-				//}
-				//
-				//if strings.Contains(err.Error(), "transaction already in mempool") {
-				//	return nil
-				//}
-
 				if _, ok := chain.IsSequenceError(err); ok {
 					return retry.Unrecoverable(err)
 				}
+
 				return errors.Wrap(err, "broadcasting transaction failed")
 			}
 
@@ -833,7 +830,7 @@ func buildBroadcastClient(config StressConfig) (ratelimit.BroadcastFunc, error) 
 			retry.Context(ctx),
 			retry.Attempts(10),
 			retry.DelayType(retry.BackOffDelay),
-			retry.MaxDelay(5*time.Second),
+			retry.MaxDelay(1*time.Second),
 		)
 		if err != nil {
 			return "", err
