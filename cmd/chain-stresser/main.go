@@ -528,10 +528,16 @@ func main() {
 		Use:   "tx-replay",
 		Short: "Run stresstest with state replay transactions.",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if replayCfg.CometRPC == "" {
-				return errors.New("--sniffer-rpc is required for remote sniffing.")
+			if replayCfg.CometRPC == "" && replayCfg.FromFile == "" {
+				return errors.New("--sniffer-rpc or --from-file is required to replay.")
 			}
-			if replayCfg.StartHeight == 0 {
+			if replayCfg.FromFile != "" && replayCfg.ToFile != "" {
+				return errors.New("Both --from-file and --to-file shouldn't be set at the same time.")
+			}
+			if replayCfg.FromFile != "" && (replayCfg.StartHeight != 0 || replayCfg.EndHeight != 0) {
+				return errors.New("Shouldn't set block start or end heights when replaying from file")
+			}
+			if replayCfg.StartHeight == 0 && replayCfg.FromFile == "" {
 				return errors.New("--sniffer-start-height is required for remote sniffing.")
 			}
 
@@ -545,18 +551,13 @@ func main() {
 				log.DefaultLogger.SetLevel(log.DebugLevel)
 			}
 
-			queryClient := chain.NewClient(
-				stressCfg.ChainID,
-				stressCfg.NodeAddress,
-				stressCfg.GRPCAddress,
-			)
-			var txnsReplayProvider payload.TxProvider
-
 			sniffer, err := replay.NewSniffer(
 				&replay.TxReplayConfig{
 					CometRPC:    replayCfg.CometRPC,
 					StartHeight: int64(replayCfg.StartHeight),
 					EndHeight:   replayCfg.EndHeight,
+					FromFile:    replayCfg.FromFile,
+					ToFile:      replayCfg.ToFile,
 				},
 				rootCtx,
 			)
@@ -568,7 +569,17 @@ func main() {
 				sniffer.Start()
 			}()
 
-			txnsReplayProvider, err = payload.NewTxnsReplayStressProvider(
+			if replayCfg.ToFile != "" { // we just dumping txs, no replay needed
+				<-sniffer.Done()
+				return nil
+			}
+
+			queryClient := chain.NewClient(
+				stressCfg.ChainID,
+				stressCfg.NodeAddress,
+				stressCfg.GRPCAddress,
+			)
+			txnsReplayProvider, err := payload.NewTxnsReplayStressProvider(
 				queryClient,
 				sniffer.Blocks(),
 				sniffer.Errors(),
@@ -592,6 +603,8 @@ func main() {
 	txnsReplayCmd.Flags().StringVar(&replayCfg.CometRPC, "sniffer-rpc", "http://127.0.0.1:26657", "RPC endpoint to use for the txns sniffer.")
 	txnsReplayCmd.Flags().Int64Var(&replayCfg.StartHeight, "sniffer-start-height", 0, "Start height for the txns sniffer (must be devnetified height + 1).")
 	txnsReplayCmd.Flags().Int64Var(&replayCfg.EndHeight, "sniffer-end-height", 0, "End height for the txns sniffer (optional, defaults to endless mode).")
+	txnsReplayCmd.Flags().StringVar(&replayCfg.FromFile, "from-file", "", "filepath to read sniffed txs from. If omitted, will sniff txs from RPC in realtime.")
+	txnsReplayCmd.Flags().StringVar(&replayCfg.ToFile, "to-file", "", "filepath to store sniffed txs into. If omitted, will replay sniffed txs in realtime.")
 
 	// Gas limit fuzzing configuration flags
 	txnsReplayCmd.Flags().BoolVar(&stressCfg.GasFuzzing.Enabled, "gas-fuzz", false, "Enable gas limit fuzzing for transactions during replay.")

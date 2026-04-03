@@ -416,9 +416,6 @@ func Stress(
 		spawn("accounts", parallel.Exit, func(ctx context.Context) error {
 			return parallel.Run(ctx, func(ctx context.Context, spawn parallel.SpawnFn) error {
 				for accountIdx, accountTxs := range signedTxs {
-					accountTxs := accountTxs
-					accountIdx := accountIdx
-
 					initialSequence := initialAccountSequences[accountIdx]
 
 					spawn(fmt.Sprintf("account-%d", accountIdx), parallel.Continue, func(ctx context.Context) error {
