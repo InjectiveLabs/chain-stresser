@@ -570,7 +570,10 @@ func main() {
 			}()
 
 			if replayCfg.ToFile != "" { // we just dumping txs, no replay needed
-				<-sniffer.Done()
+				select {
+				case <-sniffer.Errors():
+				case <-sniffer.Done():
+				}
 				return nil
 			}
 
