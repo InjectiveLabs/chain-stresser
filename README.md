@@ -18,6 +18,7 @@ Usage:
 Available Commands:
   generate     Generates all the config files required to start injectived cluster with state for stress testing.
   tx-bank-send Run stresstest with x/bank.MsgSend transactions.
+  tx-tokenfactory-burn Run stresstest with tokenfactory MsgBurn transactions.
   tx-eth-call  Run stresstest with eth contract call transactions.
   tx-eth-send  Run stresstest with eth value send transactions.
 

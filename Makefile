@@ -60,6 +60,9 @@ compose-down:
 run-bank-send:
 	chain-stresser tx-bank-send --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
 
+run-tokenfactory-burn:
+	chain-stresser tx-tokenfactory-burn --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
+
 run-eth-send:
 	chain-stresser tx-eth-send --accounts ./chain-stresser-deploy/instances/0/accounts.json --accounts-num 1000
 
@@ -104,5 +107,5 @@ cook:
 
 .PHONY: lint install solidity cook
 .PHONY: gen-0 val-0-start val-0-clean
-.PHONY: run-bank-send run-eth-send run-eth-call
+.PHONY: run-bank-send run-tokenfactory-burn run-eth-send run-eth-call
 .PHONY: eth-counter-get

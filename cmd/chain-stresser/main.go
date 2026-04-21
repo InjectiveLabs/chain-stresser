@@ -193,6 +193,32 @@ func main() {
 	txBankMultiSendCmd.Flags().IntVar(&multiSendNumTargets, "targets", 50, "Number of targets to send the funds to.")
 	rootCmd.AddCommand(txBankMultiSendCmd)
 
+	txTokenFactoryBurnCmd := &cobra.Command{
+		Use:     "tx-tokenfactory-burn",
+		Aliases: []string{"tx-bank-burn", "tx-burn-coins"},
+		Short:   "Run stresstest with tokenfactory MsgBurn transactions.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if verboseOutput {
+				log.DefaultLogger.SetLevel(log.DebugLevel)
+			}
+
+			orPanic(readAccounts(&stressCfg, accountFile, numOfAccounts))
+
+			tokenFactoryBurnProvider, err := payload.NewTokenFactoryBurnProvider(stressCfg.MinGasPrice, stressCfg.NumOfTransactions)
+			if err != nil {
+				return errors.Wrap(err, "failed to initate tokenfactory burn stress provider")
+			}
+
+			if err := stresser.Stress(rootCtx, stressCfg, tokenFactoryBurnProvider); err != nil {
+				log.Errorf("❌ benchmark failed:\n\n%s", err)
+				os.Exit(-1)
+			}
+
+			return nil
+		},
+	}
+	rootCmd.AddCommand(txTokenFactoryBurnCmd)
+
 	txEthSendCmd := &cobra.Command{
 		Use:   "tx-eth-send",
 		Short: "Run stresstest with eth value send transactions.",
