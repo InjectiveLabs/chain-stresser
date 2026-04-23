@@ -14,7 +14,8 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/InjectiveLabs/sdk-go/chain/crypto/ethsecp256k1"
-	retry "github.com/avast/retry-go/v4"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	cmtrpcjson "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	cosmoserrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -39,7 +40,18 @@ var errRetry = errors.New("retry required")
 
 // TODO: replace with https://github.com/InjectiveLabs/sdk-go/tree/master/client/chain
 func NewClient(chainID string, addr string, grpcAddr string) Client {
-	rpcClient, err := client.NewClientFromNode("tcp://" + addr)
+	rpcHTTPClient, err := cmtrpcjson.DefaultHTTPClient("tcp://" + addr)
+	orPanic(err)
+
+	// if you're experiencing
+	if transport, ok := rpcHTTPClient.Transport.(*http.Transport); ok {
+		transport.MaxConnsPerHost = 512 // hard cap, prevents runaway sockets
+		transport.MaxIdleConns = 1024
+		transport.MaxIdleConnsPerHost = 512 // keep enough warm conns to avoid redial storms
+		transport.IdleConnTimeout = 15 * time.Second
+	}
+
+	rpcClient, err := rpchttp.NewWithClient("tcp://"+addr, rpcHTTPClient)
 	orPanic(err)
 
 	grpcClient, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -228,38 +240,54 @@ func (c Client) Broadcast(ctx context.Context, encodedTx []byte, await bool) (st
 	var txHash string
 	logAwaitDetails := false
 
-	retryOpts := []retry.Option{
-		retry.UntilSucceeded(),
-		retry.MaxDelay(10 * time.Second),
-		retry.MaxJitter(time.Second),
-		retry.DelayType(retry.RandomDelay),
-	}
-	retryOpts = append(retryOpts, retry.Context(ctx))
+	//retryOpts := []retry.Option{
+	//	retry.UntilSucceeded(),
+	//	retry.MaxDelay(10 * time.Second),
+	//	retry.MaxJitter(time.Second),
+	//	retry.DelayType(retry.RandomDelay),
+	//}
+	//retryOpts = append(retryOpts, retry.Context(ctx))
 
 	// copy bytes just in case
 	encodedTxBody := append([]byte{}, encodedTx...)
 
-	if finalError := retry.Do(
-		func() error {
-			requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
-			defer cancel()
+	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	//defer cancel()
 
-			result, err := c.broadcastTxSyncOnce(requestCtx, encodedTxBody)
-			if err != nil {
-				if IsMempoolFullError(err) {
-					return errRetry
-				}
+	result, err := c.broadcastTxSyncOnce(requestCtx, encodedTxBody)
+	if err != nil {
+		cancel()
+		if IsMempoolFullError(err) {
+			return "", errRetry
+		}
 
-				return retry.Unrecoverable(err)
-			}
-
-			txHash = result.txHash
-			return nil
-		},
-		retryOpts...,
-	); finalError != nil {
-		return txHash, finalError
+		return "", err
 	}
+
+	cancel()
+	txHash = result.txHash
+
+	//if finalError := retry.Do(
+	//	func() error {
+	//		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	//		defer cancel()
+	//
+	//		result, err := c.broadcastTxSyncOnce(requestCtx, encodedTxBody)
+	//		if err != nil {
+	//			if IsMempoolFullError(err) {
+	//				return errRetry
+	//			}
+	//
+	//			return retry.Unrecoverable(err)
+	//		}
+	//
+	//		txHash = result.txHash
+	//		return nil
+	//	},
+	//	retryOpts...,
+	//); finalError != nil {
+	//	return txHash, finalError
+	//}
 
 	txHashBytes, err := hex.DecodeString(txHash)
 	if err != nil {
